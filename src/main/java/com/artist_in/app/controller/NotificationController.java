@@ -1,0 +1,46 @@
+package com.artist_in.app.controller;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.artist_in.app.dto.common.MessageResponse;
+import com.artist_in.app.dto.common.PageResponse;
+import com.artist_in.app.dto.notification.NotificationResponse;
+import com.artist_in.app.entity.User;
+import com.artist_in.app.security.SecurityUtils;
+import com.artist_in.app.service.NotificationService;
+import com.artist_in.app.service.UserService;
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/v1/notifications")
+@RequiredArgsConstructor
+public class NotificationController {
+
+	private final NotificationService notificationService;
+	private final UserService userService;
+
+	@GetMapping
+	public ResponseEntity<PageResponse<NotificationResponse>> getNotifications(Pageable pageable) {
+		User user = userService.getUserOrThrow(SecurityUtils.getCurrentUserId());
+		return ResponseEntity.ok(notificationService.getNotifications(user, pageable));
+	}
+
+	@GetMapping("/unread-count")
+	public ResponseEntity<java.util.Map<String, Long>> getUnreadCount() {
+		User user = userService.getUserOrThrow(SecurityUtils.getCurrentUserId());
+		return ResponseEntity.ok(java.util.Map.of("unreadCount", notificationService.getUnreadCount(user)));
+	}
+
+	@PostMapping("/mark-all-read")
+	public ResponseEntity<MessageResponse> markAllRead() {
+		User user = userService.getUserOrThrow(SecurityUtils.getCurrentUserId());
+		notificationService.markAllRead(user);
+		return ResponseEntity.ok(MessageResponse.of("All notifications marked as read."));
+	}
+}

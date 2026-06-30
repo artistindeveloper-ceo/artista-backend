@@ -1,0 +1,14 @@
+package com.artist_in.app.enums;
+
+public enum NotificationType {
+    FOLLOW_REQUEST_RECEIVED,
+    FOLLOW_REQUEST_ACCEPTED,
+    NEW_FOLLOWER,
+    POST_LIKED,
+    POST_COMMENTED,
+    COMMENT_REPLIED,
+    NEW_MESSAGE,
+    JAM_SESSION_INVITE,
+    JAM_SESSION_STARTED,
+    JAM_SESSION_SONG_CHANGED
+}
