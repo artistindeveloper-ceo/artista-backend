@@ -11,7 +11,7 @@ import com.artist_in.app.entity.User;
 
 public interface FollowRepository extends JpaRepository<Follow, Long> {
 
-	Optional<Follow> findByFollowerAndFollowing(User follower, User following);
+	boolean existsByFollowerIdAndFollowingId(Long followerId, Long followingId);
 
 	boolean existsByFollowerAndFollowing(User follower, User following);
 

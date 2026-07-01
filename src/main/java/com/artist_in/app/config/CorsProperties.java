@@ -11,7 +11,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Configuration
-@ConfigurationProperties(prefix = "jamconnect.cors")
+@ConfigurationProperties(prefix = "artist-in.cors")
 public class CorsProperties {
 
     private List<String> allowedOrigins;
