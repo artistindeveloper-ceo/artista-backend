@@ -9,7 +9,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Configuration
-@ConfigurationProperties(prefix = "jamconnect.uploads")
+@ConfigurationProperties(prefix = "artist-in.uploads")
 public class UploadProperties {
 
 	private String baseDir;

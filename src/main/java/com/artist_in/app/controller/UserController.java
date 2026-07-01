@@ -1,7 +1,9 @@
 package com.artist_in.app.controller;
 
+import com.artist_in.app.security.UserPrincipal;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -77,9 +79,10 @@ public class UserController {
     @GetMapping("/search")
     public ResponseEntity<PageResponse<UserSummaryResponse>> search(
             @RequestParam String query,
+            @AuthenticationPrincipal UserPrincipal currentUser,   // ✅ ADD
             Pageable pageable
     ) {
-        return ResponseEntity.ok(userService.searchUsers(query, pageable));
+        return ResponseEntity.ok(userService.searchUsers(query, currentUser.getId(), pageable)); // ✅ pass id
     }
 
     private Long currentUserIdOrNull() {

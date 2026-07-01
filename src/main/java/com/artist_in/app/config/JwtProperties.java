@@ -9,7 +9,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Configuration
-@ConfigurationProperties(prefix = "jamconnect.jwt")
+@ConfigurationProperties(prefix = "artist-in.jwt")
 public class JwtProperties {
 
     private String secret;

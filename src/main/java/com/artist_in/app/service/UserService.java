@@ -19,7 +19,6 @@ import com.artist_in.app.repository.FollowRepository;
 import com.artist_in.app.repository.FollowRequestRepository;
 import com.artist_in.app.repository.PostRepository;
 import com.artist_in.app.repository.UserRepository;
-import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -142,9 +141,17 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
-	public PageResponse<UserSummaryResponse> searchUsers(String query, Pageable pageable) {
-		Page<User> page = userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(query,
+	public PageResponse<UserSummaryResponse> searchUsers(String query, Long currentUserId, Pageable pageable) {
+		Page<User> users = userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(query,
 				query, pageable);
-		return PageResponse.from(page, UserMapper::toSummary);
+
+		Page<UserSummaryResponse> mapped = users.map(user -> {
+			boolean isFollowing = followRepository.existsByFollowerIdAndFollowingId(currentUserId, user.getId());
+			return UserSummaryResponse.builder().id(user.getId()).username(user.getUsername())
+					.displayName(user.getDisplayName()).profilePhotoUrl(user.getProfilePhotoUrl())
+					.primaryInstrument(user.getPrimaryInstrument()).isFollowing(isFollowing).build();
+		});
+
+		return PageResponse.from(mapped, u -> u); // ✅ fixed line
 	}
 }
