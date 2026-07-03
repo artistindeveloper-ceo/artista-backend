@@ -12,5 +12,4 @@ public class JamConnectApplication {
         SpringApplication.run(JamConnectApplication.class, args);
         System.out.println("Jam is connected Now.............");
     }
-
 }

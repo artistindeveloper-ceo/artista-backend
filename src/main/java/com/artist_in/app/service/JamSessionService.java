@@ -97,8 +97,7 @@ public class JamSessionService {
 	}
 
 	@Transactional(readOnly = true)
-	public PageResponse<JamSessionResponse> getMySessions(Long leaderId,
-			Pageable pageable) {
+	public PageResponse<JamSessionResponse> getMySessions(Long leaderId, Pageable pageable) {
 		User leader = userService.getUserOrThrow(leaderId);
 		Page<JamSession> page = jamSessionRepository.findByLeader(leader, pageable);
 		return PageResponse.from(page, this::toResponse);
@@ -211,6 +210,13 @@ public class JamSessionService {
 		Song song = songRepository.findById(request.getSongId())
 				.orElseThrow(() -> ResourceNotFoundException.of("Song", request.getSongId()));
 
+		// ⬇️ NAYA CHECK — duplicate rokta hai
+		boolean alreadyExists = jamSessionSongRepository.findByJamSessionOrderByPositionAsc(session).stream()
+				.anyMatch(jss -> jss.getSong().getId().equals(song.getId()));
+		if (alreadyExists) {
+			throw new BadRequestException("This song is already in the setlist.");
+		}
+
 		int position = request.getPosition() != null ? request.getPosition()
 				: (int) jamSessionSongRepository.countByJamSession(session);
 
@@ -218,7 +224,6 @@ public class JamSessionService {
 		jss = jamSessionSongRepository.save(jss);
 
 		broadcastSetlistUpdate(session);
-
 		return toSetlistEntryResponse(jss);
 	}
 
