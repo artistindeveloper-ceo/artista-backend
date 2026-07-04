@@ -21,4 +21,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 	int markConversationReadForUser(@Param("conversation") Conversation conversation, @Param("readerId") Long readerId);
 
 	long countByConversationAndSenderIdNotAndIsReadFalse(Conversation conversation, Long senderId);
+
+	@Query("SELECT COUNT(m) FROM ChatMessage m " + "WHERE m.isDeleted = false AND m.isRead = false "
+			+ "AND m.sender.id <> :userId "
+			+ "AND (m.conversation.userA.id = :userId OR m.conversation.userB.id = :userId)")
+	long countTotalUnreadForUser(@Param("userId") Long userId);
 }

@@ -3,6 +3,7 @@ package com.artist_in.app.controller;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +19,7 @@ import com.artist_in.app.dto.message.ChatMessageResponse;
 import com.artist_in.app.dto.message.ConversationResponse;
 import com.artist_in.app.dto.message.SendMessageRequest;
 import com.artist_in.app.security.SecurityUtils;
+import com.artist_in.app.security.UserPrincipal;
 import com.artist_in.app.service.FileStorageService;
 import com.artist_in.app.service.MessageService;
 
@@ -69,5 +71,11 @@ public class MessageController {
 		FileStorageService.StoredMedia stored = fileStorageService.storeMedia(file,
 				FileStorageService.UploadCategory.CHAT_ATTACHMENTS);
 		return ResponseEntity.ok(MessageResponse.of(stored.url()));
+	}
+
+	@GetMapping("/unread-count")
+	public ResponseEntity<Long> getUnreadCount(@AuthenticationPrincipal UserPrincipal principal) {
+		long count = messageService.getTotalUnreadCount(principal.getId());
+		return ResponseEntity.ok(count);
 	}
 }

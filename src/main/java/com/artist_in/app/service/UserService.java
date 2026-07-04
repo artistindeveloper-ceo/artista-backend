@@ -142,16 +142,23 @@ public class UserService {
 
 	@Transactional(readOnly = true)
 	public PageResponse<UserSummaryResponse> searchUsers(String query, Long currentUserId, Pageable pageable) {
-		Page<User> users = userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(query,
-				query, pageable);
+	    Page<User> users = userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(query,
+	            query, pageable);
 
-		Page<UserSummaryResponse> mapped = users.map(user -> {
-			boolean isFollowing = followRepository.existsByFollowerIdAndFollowingId(currentUserId, user.getId());
-			return UserSummaryResponse.builder().id(user.getId()).username(user.getUsername())
-					.displayName(user.getDisplayName()).profilePhotoUrl(user.getProfilePhotoUrl())
-					.primaryInstrument(user.getPrimaryInstrument()).isFollowing(isFollowing).build();
-		});
+	    User currentUser = getUserOrThrow(currentUserId); // ✅ NEW — needed for the pending check
 
-		return PageResponse.from(mapped, u -> u); // ✅ fixed line
+	    Page<UserSummaryResponse> mapped = users.map(user -> {
+	        boolean isFollowing = followRepository.existsByFollowerIdAndFollowingId(currentUserId, user.getId());
+	        boolean hasPending = followRequestRepository // ✅ NEW
+	                .findByRequesterAndTargetAndStatus(currentUser, user, FollowRequestStatus.PENDING)
+	                .isPresent();
+	        return UserSummaryResponse.builder().id(user.getId()).username(user.getUsername())
+	                .displayName(user.getDisplayName()).profilePhotoUrl(user.getProfilePhotoUrl())
+	                .primaryInstrument(user.getPrimaryInstrument()).isFollowing(isFollowing)
+	                .hasPendingFollowRequest(hasPending) // ✅ NEW
+	                .build();
+	    });
+
+	    return PageResponse.from(mapped, u -> u);
 	}
 }
