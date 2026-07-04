@@ -1,10 +1,8 @@
 package com.artist_in.app.dto.user;
 
 import java.time.Instant;
-
 import com.artist_in.app.entity.User;
 import com.artist_in.app.enums.InstrumentType;
-
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,12 +18,15 @@ public class DiscoverUserDto {
 	private InstrumentType primaryInstrument;
 	private String genres;
 	private Instant joinedAt;
+	private boolean hasPendingFollowRequest; // ✅ NEW
 
-	public static DiscoverUserDto from(User user) {
+	// Note: old from(User) kept for reference but no longer used —
+	// pending-check needs currentUserId, so build it in the service instead.
+	public static DiscoverUserDto from(User user, boolean hasPendingFollowRequest) {
 		return DiscoverUserDto.builder().id(user.getId()).username(user.getUsername())
 				.displayName(user.getDisplayName()).bio(user.getBio()).profilePhotoUrl(user.getProfilePhotoUrl())
 				.location(user.getLocation()).primaryInstrument(user.getPrimaryInstrument()).genres(user.getGenres())
-				.joinedAt(user.getCreatedAt()) // from BaseEntity
+				.joinedAt(user.getCreatedAt()).hasPendingFollowRequest(hasPendingFollowRequest) // ✅ NEW
 				.build();
 	}
 }

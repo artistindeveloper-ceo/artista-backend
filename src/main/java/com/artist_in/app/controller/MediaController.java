@@ -27,37 +27,37 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MediaController {
 
-	private final FileStorageService fileStorageService;
+    private final FileStorageService fileStorageService;
 
-	@GetMapping("/{category}/{filename}")
-	public ResponseEntity<InputStreamResource> getFile(@PathVariable String category, @PathVariable String filename)
-			throws IOException {
-		String relativePath = category + "/" + filename;
-		InputStream inputStream = fileStorageService.readFile(relativePath);
+    @GetMapping("/{category}/{filename}")
+    public ResponseEntity<InputStreamResource> getFile(@PathVariable String category, @PathVariable String filename)
+            throws IOException {
+        String relativePath = category + "/" + filename;
+        InputStream inputStream = fileStorageService.readFile(relativePath);
 
-		MediaType mediaType = resolveMediaType(filename);
+        MediaType mediaType = resolveMediaType(filename);
 
-		return ResponseEntity.ok().contentType(mediaType)
-				.header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
-				.body(new InputStreamResource(inputStream));
-	}
+        return ResponseEntity.ok().contentType(mediaType)
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
+                .body(new InputStreamResource(inputStream));
+    }
 
-	private MediaType resolveMediaType(String filename) {
-		String lower = filename.toLowerCase();
-		if (lower.endsWith(".png"))
-			return MediaType.IMAGE_PNG;
-		if (lower.endsWith(".jpg") || lower.endsWith(".jpeg"))
-			return MediaType.IMAGE_JPEG;
-		if (lower.endsWith(".gif"))
-			return MediaType.IMAGE_GIF;
-		if (lower.endsWith(".webp"))
-			return MediaType.valueOf("image/webp");
-		if (lower.endsWith(".mp4"))
-			return MediaType.valueOf("video/mp4");
-		if (lower.endsWith(".mov"))
-			return MediaType.valueOf("video/quicktime");
-		if (lower.endsWith(".webm"))
-			return MediaType.valueOf("video/webm");
-		return MediaType.APPLICATION_OCTET_STREAM;
-	}
+    private MediaType resolveMediaType(String filename) {
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".png"))
+            return MediaType.IMAGE_PNG;
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg"))
+            return MediaType.IMAGE_JPEG;
+        if (lower.endsWith(".gif"))
+            return MediaType.IMAGE_GIF;
+        if (lower.endsWith(".webp"))
+            return MediaType.valueOf("image/webp");
+        if (lower.endsWith(".mp4"))
+            return MediaType.valueOf("video/mp4");
+        if (lower.endsWith(".mov"))
+            return MediaType.valueOf("video/quicktime");
+        if (lower.endsWith(".webm"))
+            return MediaType.valueOf("video/webm");
+        return MediaType.APPLICATION_OCTET_STREAM;
+    }
 }

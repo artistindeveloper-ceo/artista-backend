@@ -18,4 +18,5 @@ import lombok.NoArgsConstructor;
 		private String profilePhotoUrl;
 		private InstrumentType primaryInstrument;
 		private boolean isFollowing;
+		private boolean hasPendingFollowRequest;
 	}
