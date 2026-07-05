@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,8 +23,9 @@ import com.artist_in.app.dto.jam.JamParticipantResponse;
 import com.artist_in.app.dto.jam.JamSessionEvent;
 import com.artist_in.app.dto.jam.JamSessionResponse;
 import com.artist_in.app.dto.jam.JamSessionSongResponse;
-import com.artist_in.app.dto.jam.TransposeRequest;
+import com.artist_in.app.dto.transpose.TransposeDeltaRequest;
 import com.artist_in.app.security.SecurityUtils;
+import com.artist_in.app.security.UserPrincipal;
 import com.artist_in.app.service.JamSessionService;
 
 import jakarta.validation.Valid;
@@ -121,11 +123,12 @@ public class JamSessionController {
 	 * The leader transposes the key of the currently active song in real time; all
 	 * participants instantly see updated chords.
 	 */
-	@PostMapping("/{sessionId}/transpose")
-	public ResponseEntity<JamSessionEvent> transpose(@PathVariable Long sessionId,
-			@Valid @RequestBody TransposeRequest request) {
-		Long userId = SecurityUtils.getCurrentUserId();
-		return ResponseEntity.ok(jamSessionService.transposeCurrentSong(sessionId, userId, request));
+	@PostMapping("/{sessionId}/transpose/delta")
+	public ResponseEntity<JamSessionEvent> transposeByDelta(@PathVariable Long sessionId,
+			@RequestBody TransposeDeltaRequest request, @AuthenticationPrincipal UserPrincipal principal) {
+		JamSessionEvent event = jamSessionService.transposeCurrentSongBy(sessionId, principal.getId(),
+				request.getDeltaSteps());
+		return ResponseEntity.ok(event);
 	}
 
 	@GetMapping("/{sessionId}/participants")

@@ -43,8 +43,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .addInterceptors(jwtHandshakeInterceptor)
                 .withSockJS();
 
-        // Also expose a raw (non-SockJS) endpoint for native WebSocket clients.
-        registry.addEndpoint("/ws")
+        // Native WebSocket clients (Flutter) — separate path, no SockJS conflict
+        registry.addEndpoint("/ws-native")
                 .setAllowedOriginPatterns(corsProperties.getAllowedOrigins().toArray(new String[0]))
                 .addInterceptors(jwtHandshakeInterceptor);
     }
