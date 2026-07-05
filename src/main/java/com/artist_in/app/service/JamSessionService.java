@@ -34,7 +34,8 @@ import com.artist_in.app.repository.JamSessionParticipantRepository;
 import com.artist_in.app.repository.JamSessionRepository;
 import com.artist_in.app.repository.JamSessionSongRepository;
 import com.artist_in.app.repository.SongRepository;
-import com.artist_in.app.util.ChordTransposer;
+import com.artist_in.app.transpose.TransposeResult;
+import com.artist_in.app.transpose.TransposeService;
 import com.artist_in.app.util.UserMapper;
 import com.artist_in.app.websocket.JamSessionEventPublisher;
 
@@ -55,6 +56,8 @@ public class JamSessionService {
 	private final UserService userService;
 	private final NotificationService notificationService;
 	private final JamSessionEventPublisher eventPublisher;
+	// NEW — all transpose math/persistence/permission logic lives behind this now.
+	private final TransposeService transposeService;
 
 	@Transactional
 	public JamSessionResponse createSession(Long leaderId, CreateJamSessionRequest request) {
@@ -249,6 +252,11 @@ public class JamSessionService {
 	 * The core "live jam session" action: the leader switches the currently active
 	 * song. Every connected musician receives the new lyrics+chords (already
 	 * transposed) over the WebSocket topic immediately.
+	 *
+	 * NOTE: this is a "song switch" concern, not a "transpose" concern — it just
+	 * reuses whatever offset is already persisted for the target song (or an
+	 * explicit override passed in this request). The actual chord math is delegated
+	 * to TransposeService so ChordTransposer is never touched here.
 	 */
 	@Transactional
 	public JamSessionEvent changeCurrentSong(Long sessionId, Long requesterId, ChangeCurrentSongRequest request) {
@@ -259,9 +267,13 @@ public class JamSessionService {
 				.orElseThrow(() -> ResourceNotFoundException.of("Setlist entry", request.getJamSessionSongId()));
 
 		if (request.getTransposeOffset() != null) {
+			// Leader ne explicitly naya offset diya hai is song ke liye
 			jss.setTransposeOffset(request.getTransposeOffset());
-			jamSessionSongRepository.save(jss);
+		} else {
+			// Session ka jo bhi current offset chal raha hai, wahi naye song pe bhi carry karo
+			jss.setTransposeOffset(session.getCurrentTransposeOffset());
 		}
+		jamSessionSongRepository.save(jss);
 
 		session.setCurrentSongId(jss.getId());
 		session.setCurrentTransposeOffset(jss.getTransposeOffset());
@@ -273,32 +285,23 @@ public class JamSessionService {
 	}
 
 	/**
-	 * Leader changes the transpose (key) of the currently playing song in real
-	 * time, e.g. shifting up 2 semitones mid-performance. Broadcasts the
-	 * recalculated chords to everyone instantly.
+	 * Leader changes the transpose (key) of the currently playing song to an
+	 * ABSOLUTE offset. Kept for backward compatibility with the existing
+	 * TransposeRequest endpoint — delegates entirely to TransposeService now.
 	 */
 	@Transactional
 	public JamSessionEvent transposeCurrentSong(Long sessionId, Long requesterId, TransposeRequest request) {
-		JamSession session = getSessionOrThrow(sessionId);
-		assertLeaderOrCoLeader(session, requesterId);
+		return transposeService.transposeTo(sessionId, requesterId, request.getTransposeOffset());
+	}
 
-		if (session.getCurrentSongId() == null) {
-			throw new BadRequestException("No song is currently active in this session.");
-		}
-
-		JamSessionSong jss = jamSessionSongRepository.findById(session.getCurrentSongId())
-				.orElseThrow(() -> ResourceNotFoundException.of("Setlist entry", session.getCurrentSongId()));
-
-		jss.setTransposeOffset(request.getTransposeOffset());
-		jamSessionSongRepository.save(jss);
-
-		session.setCurrentTransposeOffset(request.getTransposeOffset());
-		jamSessionRepository.save(session);
-
-		JamSessionEvent event = buildSongChangedEvent(jss);
-		event.setEventType(JamSessionEvent.EventType.TRANSPOSE_CHANGED);
-		eventPublisher.publish(sessionId, event);
-		return event;
+	/**
+	 * NEW — the recommended way for the +/- buttons to call transpose. Client only
+	 * sends a relative step (+1 / -1); the backend is the sole owner of the running
+	 * offset, so there's no client-side "stale state" possible.
+	 */
+	@Transactional
+	public JamSessionEvent transposeCurrentSongBy(Long sessionId, Long requesterId, int deltaSteps) {
+		return transposeService.transposeBy(sessionId, requesterId, deltaSteps);
 	}
 
 	@Transactional(readOnly = true)
@@ -337,14 +340,14 @@ public class JamSessionService {
 	}
 
 	private JamSessionEvent buildSongChangedEvent(JamSessionSong jss) {
-		Song song = jss.getSong();
-		String transposedKey = ChordTransposer.transposeKey(song.getOriginalKey(), jss.getTransposeOffset());
-		String transposedLyrics = ChordTransposer.transposeLyricsWithChords(song.getLyricsWithChords(),
-				jss.getTransposeOffset());
+		// Delegates the actual chord/key math to TransposeService — this class no
+		// longer imports or calls ChordTransposer directly.
+		TransposeResult result = transposeService.computeTransposedContent(jss);
 
 		return JamSessionEvent.builder().eventType(JamSessionEvent.EventType.SONG_CHANGED)
-				.currentSong(toSetlistEntryResponse(jss)).transposedKey(transposedKey)
-				.transposedLyricsWithChords(transposedLyrics).transposeOffset(jss.getTransposeOffset()).build();
+				.currentSong(toSetlistEntryResponse(jss)).transposedKey(result.transposedKey())
+				.transposedLyricsWithChords(result.transposedLyricsWithChords())
+				.transposeOffset(jss.getTransposeOffset()).build();
 	}
 
 	private JamSessionSongResponse findCurrentSongResponse(JamSession session) {

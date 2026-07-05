@@ -72,6 +72,7 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+		ex.printStackTrace(); // ya log.error("Transpose error", ex); agar Slf4j hai
 		return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred. Please try again later.",
 				request, null);
 	}

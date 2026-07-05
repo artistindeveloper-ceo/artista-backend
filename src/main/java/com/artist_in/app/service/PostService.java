@@ -77,9 +77,22 @@ public class PostService {
 		return PageResponse.from(page, post -> toResponse(post, viewerId));
 	}
 
+	/**
+	 * Explore = public posts from people the viewer does NOT already follow (and
+	 * excluding the viewer's own posts). Sorted by engagement then recency, so
+	 * newer accounts see popular/trending public content — mirrors Instagram's
+	 * Explore tab, which is distinct from Home (following-only).
+	 */
 	@Transactional(readOnly = true)
 	public PageResponse<PostResponse> getExploreFeed(Long viewerId, Pageable pageable) {
-		Page<Post> page = postRepository.findByIsArchivedFalseOrderByCreatedAtDesc(pageable);
+		User viewer = userService.getUserOrThrow(viewerId);
+
+		Page<Follow> following = followRepository.findByFollower(viewer, Pageable.unpaged());
+		List<Long> excludedAuthorIds = following.getContent().stream().map(f -> f.getFollowing().getId())
+				.collect(Collectors.toList());
+		excludedAuthorIds.add(viewerId); // apne posts bhi exclude karo
+
+		Page<Post> page = postRepository.findExplorePosts(excludedAuthorIds, pageable);
 		return PageResponse.from(page, post -> toResponse(post, viewerId));
 	}
 
@@ -128,4 +141,5 @@ public class PostService {
 				.mediaType(post.getMediaType()).likeCount(post.getLikeCount()).commentCount(post.getCommentCount())
 				.likedByViewer(likedByViewer).createdAt(post.getCreatedAt()).build();
 	}
+
 }

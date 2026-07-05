@@ -1,6 +1,7 @@
 package com.artist_in.app.repository;
 
 import java.util.Collection;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,4 +20,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	Page<Post> findFeedForAuthorIds(@Param("authorIds") Collection<Long> authorIds, Pageable pageable);
 
 	Page<Post> findByIsArchivedFalseOrderByCreatedAtDesc(Pageable pageable);
+
+	@Query("SELECT p FROM Post p WHERE p.author.isPrivate = false " + "AND p.isArchived = false "
+			+ "AND p.author.id NOT IN :excludedAuthorIds " + "ORDER BY p.likeCount DESC, p.createdAt DESC")
+	Page<Post> findExplorePosts(@Param("excludedAuthorIds") List<Long> excludedAuthorIds, Pageable pageable);
 }
