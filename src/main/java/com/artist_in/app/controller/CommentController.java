@@ -26,9 +26,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CommentController {
 
-    private final CommentService commentService;
+	private final CommentService commentService;
 
-    @PostMapping("/posts/{postId}/comments")
+	@PostMapping("/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> addComment(
             @PathVariable Long postId,
             @Valid @RequestBody CreateCommentRequest request
@@ -38,20 +38,20 @@ public class CommentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/posts/{postId}/comments")
-    public ResponseEntity<PageResponse<CommentResponse>> getComments(@PathVariable Long postId, Pageable pageable) {
-        return ResponseEntity.ok(commentService.getTopLevelComments(postId, pageable));
-    }
+	@GetMapping("/posts/{postId}/comments")
+	public ResponseEntity<PageResponse<CommentResponse>> getComments(@PathVariable Long postId, Pageable pageable) {
+		return ResponseEntity.ok(commentService.getTopLevelComments(postId, pageable));
+	}
 
-    @GetMapping("/comments/{commentId}/replies")
-    public ResponseEntity<PageResponse<CommentResponse>> getReplies(@PathVariable Long commentId, Pageable pageable) {
-        return ResponseEntity.ok(commentService.getReplies(commentId, pageable));
-    }
+	@GetMapping("/comments/{commentId}/replies")
+	public ResponseEntity<PageResponse<CommentResponse>> getReplies(@PathVariable Long commentId, Pageable pageable) {
+		return ResponseEntity.ok(commentService.getReplies(commentId, pageable));
+	}
 
-    @DeleteMapping("/comments/{commentId}")
-    public ResponseEntity<MessageResponse> deleteComment(@PathVariable Long commentId) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        commentService.deleteComment(commentId, userId);
-        return ResponseEntity.ok(MessageResponse.of("Comment deleted successfully."));
-    }
+	@DeleteMapping("/comments/{commentId}")
+	public ResponseEntity<MessageResponse> deleteComment(@PathVariable Long commentId) {
+		Long userId = SecurityUtils.getCurrentUserId();
+		commentService.deleteComment(commentId, userId);
+		return ResponseEntity.ok(MessageResponse.of("Comment deleted successfully."));
+	}
 }
