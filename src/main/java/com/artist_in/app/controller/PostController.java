@@ -46,6 +46,7 @@ public class PostController {
 			FileStorageService.StoredMedia stored = fileStorageService.storeMedia(media,
 					FileStorageService.UploadCategory.POST_MEDIA);
 			mediaUrl = stored.url();
+			thumbnailUrl = stored.thumbnailUrl(); // ← NEW
 			mediaType = stored.mediaType();
 		}
 
@@ -89,6 +90,13 @@ public class PostController {
 	public ResponseEntity<PageResponse<PostResponse>> getUserPosts(@PathVariable Long userId, Pageable pageable) {
 		Long viewerId = currentUserIdOrNull();
 		return ResponseEntity.ok(postService.getUserPosts(userId, viewerId, pageable));
+	}
+
+	@PostMapping("/{id}/view")
+	public ResponseEntity<Void> registerView(@PathVariable Long id) {
+		Long viewerId = currentUserIdOrNull();
+		postService.incrementViews(id, viewerId);
+		return ResponseEntity.ok().build();
 	}
 
 	private Long currentUserIdOrNull() {

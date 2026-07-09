@@ -25,4 +25,5 @@ public class PostResponse {
 	private long commentCount;
 	private boolean likedByViewer;
 	private Instant createdAt;
+	private Long viewsCount;
 }

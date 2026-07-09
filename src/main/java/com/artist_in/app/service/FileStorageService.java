@@ -18,13 +18,16 @@ import com.artist_in.app.enums.MediaType;
 import com.artist_in.app.exception.BadRequestException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileStorageService {
 
 	private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp");
 	private static final Set<String> ALLOWED_VIDEO_EXTENSIONS = Set.of("mp4", "mov", "webm", "m4v");
+	private static final String FFMPEG_PATH = "/usr/local/bin/ffmpeg";
 
 	private final UploadProperties uploadProperties;
 
@@ -48,7 +51,11 @@ public class FileStorageService {
 		return store(file, category, extension);
 	}
 
-	public String storeVideo(MultipartFile file, UploadCategory category) {
+	/**
+	 * Stores raw video, then compresses it (H.264, max 720p) and generates a JPEG
+	 * thumbnail via FFmpeg. Returns the compressed video URL + thumbnail URL.
+	 */
+	public VideoStoreResult storeVideo(MultipartFile file, UploadCategory category) {
 		validateNotEmpty(file);
 		String extension = extractExtension(file.getOriginalFilename());
 		if (!ALLOWED_VIDEO_EXTENSIONS.contains(extension.toLowerCase())) {
@@ -57,7 +64,109 @@ public class FileStorageService {
 		if (file.getSize() > uploadProperties.getMaxVideoSizeBytes()) {
 			throw new BadRequestException("Video exceeds the maximum allowed size.");
 		}
-		return store(file, category, extension);
+
+		try {
+			Path categoryDir = Paths.get(uploadProperties.getBaseDir(), category.name().toLowerCase());
+			Files.createDirectories(categoryDir);
+
+			// 1. Raw upload ko temp file mein save karo
+			String rawFilename = UUID.randomUUID() + "_raw." + extension;
+			Path rawPath = categoryDir.resolve(rawFilename);
+			try (InputStream in = file.getInputStream()) {
+				Files.copy(in, rawPath, StandardCopyOption.REPLACE_EXISTING);
+			}
+
+			// 2. Compress karo (H.264, max 720p height, reasonable bitrate)
+			String compressedFilename = UUID.randomUUID() + ".mp4";
+			Path compressedPath = categoryDir.resolve(compressedFilename);
+			boolean compressed = compressVideo(rawPath, compressedPath);
+
+			// Agar compression fail ho jaye (edge case), raw file hi use karo fallback ke
+			// taur pe
+			Path finalVideoPath;
+			String finalVideoFilename;
+			if (compressed && Files.exists(compressedPath) && Files.size(compressedPath) > 0) {
+				finalVideoPath = compressedPath;
+				finalVideoFilename = compressedFilename;
+				Files.deleteIfExists(rawPath); // raw ab zaroorat nahi
+			} else {
+				log.warn("Video compression failed, falling back to raw upload for: {}", rawFilename);
+				finalVideoPath = rawPath;
+				finalVideoFilename = rawFilename;
+			}
+
+			// 3. Thumbnail generate karo (0.5 sec ka frame, 480px width)
+			String thumbFilename = UUID.randomUUID() + "_thumb.jpg";
+			Path thumbPath = categoryDir.resolve(thumbFilename);
+			boolean thumbGenerated = generateThumbnail(finalVideoPath, thumbPath);
+
+			String videoRelativePath = category.name().toLowerCase() + "/" + finalVideoFilename;
+			String videoUrl = uploadProperties.getBaseUrl() + "/" + videoRelativePath;
+
+			String thumbnailUrl = null;
+			if (thumbGenerated && Files.exists(thumbPath)) {
+				String thumbRelativePath = category.name().toLowerCase() + "/" + thumbFilename;
+				thumbnailUrl = uploadProperties.getBaseUrl() + "/" + thumbRelativePath;
+			}
+
+			return new VideoStoreResult(videoUrl, thumbnailUrl);
+		} catch (IOException ex) {
+			throw new RuntimeException("Failed to store uploaded video.", ex);
+		}
+	}
+
+	/** Compresses video to H.264 MP4, capped at 720p height, ~1.5 Mbps bitrate. */
+	private boolean compressVideo(Path input, Path output) {
+		try {
+			ProcessBuilder pb = new ProcessBuilder(FFMPEG_PATH, "-i", input.toAbsolutePath().toString(), "-vf",
+					"scale=-2:'min(720,ih)'", "-c:v", "libx264", "-preset", "fast", "-crf", "26", "-maxrate", "1500k",
+					"-bufsize", "3000k", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-y",
+					output.toAbsolutePath().toString());
+			pb.redirectErrorStream(true);
+			Process process = pb.start();
+
+			// FFmpeg output ko drain karo taaki process block na ho
+			try (InputStream is = process.getInputStream()) {
+				is.readAllBytes();
+			}
+
+			boolean finished = process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS);
+			if (!finished) {
+				process.destroyForcibly();
+				log.error("FFmpeg compression timed out for: {}", input);
+				return false;
+			}
+			return process.exitValue() == 0;
+		} catch (IOException | InterruptedException ex) {
+			log.error("FFmpeg compression failed for: {}", input, ex);
+			return false;
+		}
+	}
+
+	/** Extracts a single JPEG frame at 0.5s, scaled to 480px width. */
+	private boolean generateThumbnail(Path videoPath, Path thumbOutput) {
+		try {
+			ProcessBuilder pb = new ProcessBuilder(FFMPEG_PATH, "-i", videoPath.toAbsolutePath().toString(), "-ss",
+					"00:00:00.5", "-vframes", "1", "-vf", "scale=480:-1", "-y",
+					thumbOutput.toAbsolutePath().toString());
+			pb.redirectErrorStream(true);
+			Process process = pb.start();
+
+			try (InputStream is = process.getInputStream()) {
+				is.readAllBytes();
+			}
+
+			boolean finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+			if (!finished) {
+				process.destroyForcibly();
+				log.error("Thumbnail generation timed out for: {}", videoPath);
+				return false;
+			}
+			return process.exitValue() == 0;
+		} catch (IOException | InterruptedException ex) {
+			log.error("Thumbnail generation failed for: {}", videoPath, ex);
+			return false;
+		}
 	}
 
 	/**
@@ -69,16 +178,20 @@ public class FileStorageService {
 		String extension = extractExtension(file.getOriginalFilename()).toLowerCase();
 
 		if (ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
-			return new StoredMedia(storeImage(file, category), MediaType.IMAGE);
+			return new StoredMedia(storeImage(file, category), null, MediaType.IMAGE);
 		} else if (ALLOWED_VIDEO_EXTENSIONS.contains(extension)) {
-			return new StoredMedia(storeVideo(file, category), MediaType.VIDEO);
+			VideoStoreResult result = storeVideo(file, category);
+			return new StoredMedia(result.videoUrl(), result.thumbnailUrl(), MediaType.VIDEO);
 		} else {
 			throw new BadRequestException("Unsupported file type. Allowed images: " + ALLOWED_IMAGE_EXTENSIONS
 					+ ", allowed videos: " + ALLOWED_VIDEO_EXTENSIONS);
 		}
 	}
 
-	public record StoredMedia(String url, MediaType mediaType) {
+	public record StoredMedia(String url, String thumbnailUrl, MediaType mediaType) {
+	}
+
+	private record VideoStoreResult(String videoUrl, String thumbnailUrl) {
 	}
 
 	public Path resolvePath(String relativePath) {

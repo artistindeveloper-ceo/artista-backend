@@ -139,7 +139,20 @@ public class PostService {
 		return PostResponse.builder().id(post.getId()).author(UserMapper.toSummary(post.getAuthor()))
 				.caption(post.getCaption()).mediaUrl(post.getMediaUrl()).thumbnailUrl(post.getThumbnailUrl())
 				.mediaType(post.getMediaType()).likeCount(post.getLikeCount()).commentCount(post.getCommentCount())
-				.likedByViewer(likedByViewer).createdAt(post.getCreatedAt()).build();
+				.likedByViewer(likedByViewer).viewsCount(post.getViewsCount()) // ← NEW
+				.createdAt(post.getCreatedAt()).build();
+	}
+
+	@Transactional
+	public void incrementViews(Long postId, Long viewerId) {
+		Post post = getPostOrThrow(postId);
+
+		// Apni khud ki post dekhne pe view count nahi badhna chahiye
+		if (viewerId != null && post.getAuthor().getId().equals(viewerId)) {
+			return;
+		}
+
+		postRepository.incrementViewCount(postId);
 	}
 
 }

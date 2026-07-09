@@ -16,4 +16,6 @@ public class UploadProperties {
 	private String baseUrl;
 	private long maxImageSizeBytes;
 	private long maxVideoSizeBytes;
+	
+	
 }
