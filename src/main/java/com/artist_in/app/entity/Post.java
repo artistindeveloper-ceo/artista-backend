@@ -53,4 +53,8 @@ public class Post extends BaseEntity {
     @Column(name = "is_archived", nullable = false)
     @Builder.Default
     private boolean isArchived = false;
+
+    @Column(name = "views_count", nullable = false)
+    @Builder.Default
+    private Long viewsCount = 0L;
 }
