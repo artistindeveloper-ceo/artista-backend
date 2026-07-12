@@ -1,4 +1,4 @@
-package com.artist_in.app.serviceImpl;
+package com.artist_in.app.serviceimpl;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
