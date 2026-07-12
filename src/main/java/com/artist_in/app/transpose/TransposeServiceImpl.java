@@ -2,6 +2,7 @@ package com.artist_in.app.transpose;
 
 import java.util.Optional;
 
+import com.artist_in.app.service.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +19,6 @@ import com.artist_in.app.exception.ResourceNotFoundException;
 import com.artist_in.app.repository.JamSessionParticipantRepository;
 import com.artist_in.app.repository.JamSessionRepository;
 import com.artist_in.app.repository.JamSessionSongRepository;
-import com.artist_in.app.service.UserService;
 import com.artist_in.app.websocket.JamSessionEventPublisher;
 
 import lombok.RequiredArgsConstructor;

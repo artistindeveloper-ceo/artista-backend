@@ -21,4 +21,5 @@ public interface FollowRequestRepository extends JpaRepository<FollowRequest, Lo
 	Page<FollowRequest> findByRequesterAndStatus(User requester, FollowRequestStatus status, Pageable pageable);
 
 	long countByTargetAndStatus(User target, FollowRequestStatus status);
+
 }
