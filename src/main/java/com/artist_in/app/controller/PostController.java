@@ -1,5 +1,6 @@
 package com.artist_in.app.controller;
 
+import com.artist_in.app.service.FileStorageService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +19,6 @@ import com.artist_in.app.dto.post.CreatePostRequest;
 import com.artist_in.app.dto.post.PostResponse;
 import com.artist_in.app.enums.MediaType;
 import com.artist_in.app.security.SecurityUtils;
-import com.artist_in.app.service.FileStorageService;
 import com.artist_in.app.service.PostService;
 
 import lombok.RequiredArgsConstructor;

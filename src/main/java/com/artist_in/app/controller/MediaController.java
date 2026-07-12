@@ -3,6 +3,7 @@ package com.artist_in.app.controller;
 import java.io.IOException;
 import java.io.InputStream;
 
+import com.artist_in.app.service.FileStorageService;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -12,12 +13,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.artist_in.app.service.FileStorageService;
-
 import lombok.RequiredArgsConstructor;
 
 /**
- * Serves files that were stored locally by FileStorageService. In production
+ * Serves files that were stored locally by FileStorageServiceImpl. In production
  * you'd typically swap this for direct static file serving (nginx) or a CDN /
  * S3 bucket, but this keeps everything self-contained for local development and
  * easy importing into any environment.
