@@ -13,40 +13,37 @@ import com.artist_in.app.dto.jam.JamSessionEvent;
 import com.artist_in.app.dto.jam.JamSessionResponse;
 import com.artist_in.app.dto.jam.JamSessionSongResponse;
 import com.artist_in.app.dto.jam.TransposeRequest;
-import com.artist_in.app.entity.JamSession;
 
 public interface JamSessionService {
 
-    JamSessionResponse createSession(Long leaderId, CreateJamSessionRequest request);
+	JamSessionResponse createSession(Long leaderId, CreateJamSessionRequest request);
 
-    JamSessionResponse getSession(Long sessionId);
+	JamSessionResponse getSession(Long sessionId);
 
-    JamSessionResponse getSessionByInviteCode(String inviteCode);
+	JamSessionResponse getSessionByInviteCode(String inviteCode);
 
-    PageResponse<JamSessionResponse> getMySessions(Long leaderId, Pageable pageable);
+	PageResponse<JamSessionResponse> getMySessions(Long leaderId, Pageable pageable);
 
-    JamSessionResponse joinSession(String inviteCode, Long userId);
+	JamSessionResponse joinSession(String inviteCode, Long userId);
 
-    void leaveSession(Long sessionId, Long userId);
+	void leaveSession(Long sessionId, Long userId);
 
-    JamSessionResponse startSession(Long sessionId, Long requesterId);
+	JamSessionResponse startSession(Long sessionId, Long requesterId);
 
-    JamSessionResponse endSession(Long sessionId, Long requesterId);
+	JamSessionResponse endSession(Long sessionId, Long requesterId);
 
-    void inviteToSession(Long sessionId, Long requesterId, Long inviteeId);
+	void inviteToSession(Long sessionId, Long requesterId, Long inviteeId);
 
-    JamSessionSongResponse addSongToSetlist(Long sessionId, Long requesterId, AddSongToSetlistRequest request);
+	JamSessionSongResponse addSongToSetlist(Long sessionId, Long requesterId, AddSongToSetlistRequest request);
 
-    void removeSongFromSetlist(Long sessionId, Long requesterId, Long jamSessionSongId);
+	void removeSongFromSetlist(Long sessionId, Long requesterId, Long jamSessionSongId);
 
-    JamSessionEvent changeCurrentSong(Long sessionId, Long requesterId, ChangeCurrentSongRequest request);
+	JamSessionEvent changeCurrentSong(Long sessionId, Long requesterId, ChangeCurrentSongRequest request);
 
-    JamSessionEvent transposeCurrentSong(Long sessionId, Long requesterId, TransposeRequest request);
+	JamSessionEvent transposeCurrentSong(Long sessionId, Long requesterId, TransposeRequest request);
 
-    JamSessionEvent transposeCurrentSongBy(Long sessionId, Long requesterId, int deltaSteps);
+	JamSessionEvent transposeCurrentSongBy(Long sessionId, Long requesterId, int deltaSteps);
 
-    List<JamParticipantResponse> getActiveParticipants(Long sessionId);
-
-
+	List<JamParticipantResponse> getActiveParticipants(Long sessionId);
 
 }
