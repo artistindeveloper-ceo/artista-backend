@@ -14,5 +14,5 @@ import lombok.Setter;
 @ConfigurationProperties(prefix = "artist-in.cors")
 public class CorsProperties {
 
-    private List<String> allowedOrigins;
+	private List<String> allowedOrigins;
 }

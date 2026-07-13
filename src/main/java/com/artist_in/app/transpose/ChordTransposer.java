@@ -1,7 +1,5 @@
 package com.artist_in.app.transpose;
 
-import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,19 +14,17 @@ import java.util.regex.Pattern;
  */
 public final class ChordTransposer {
 
-
 	private ChordTransposer() {
 	}
 
-	// Prefer sharps for the default scale; flats are normalized to their sharp equivalent.
-	private static final String[] SHARP_SCALE = {
-			"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
-	};
+	// Prefer sharps for the default scale; flats are normalized to their sharp
+	// equivalent.
+	private static final String[] SHARP_SCALE = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 	private static final java.util.Map<String, Integer> NOTE_TO_INDEX = new java.util.HashMap<>();
 
 	static {
-		String[] names = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+		String[] names = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 		for (int i = 0; i < names.length; i++) {
 			NOTE_TO_INDEX.put(names[i], i);
 		}
@@ -45,17 +41,15 @@ public final class ChordTransposer {
 	// Matches a root note (A-G) optionally followed by # or b, then any trailing
 	// chord-quality text (m, 7, maj7, sus2, dim, aug, add9, etc), optionally
 	// followed by a slash and a bass note (also transposed).
-	private static final Pattern CHORD_PATTERN = Pattern.compile(
-			"^([A-G])(#|b)?([^/\\s]*)(?:/([A-G])(#|b)?)?$"
-	);
+	private static final Pattern CHORD_PATTERN = Pattern.compile("^([A-G])(#|b)?([^/\\s]*)(?:/([A-G])(#|b)?)?$");
 
 	private static final Pattern BRACKETED_CHORD = Pattern.compile("\\[([^\\[\\]]+)]");
 
 	/**
 	 * Transpose every chord token found inside square brackets in the given
 	 * lyrics+chords text by the given number of semitones. Non-chord bracketed
-	 * tokens are left unchanged (best-effort: if it doesn't look like a chord,
-	 * we don't touch it).
+	 * tokens are left unchanged (best-effort: if it doesn't look like a chord, we
+	 * don't touch it).
 	 */
 	public static String transposeLyricsWithChords(String lyricsWithChords, int semitones) {
 		if (lyricsWithChords == null || lyricsWithChords.isEmpty() || semitones == 0) {
@@ -113,7 +107,10 @@ public final class ChordTransposer {
 		return sb.toString();
 	}
 
-	/** Transpose a single key string (e.g. "G", "Am", "F#") used as a song's display key. */
+	/**
+	 * Transpose a single key string (e.g. "G", "Am", "F#") used as a song's display
+	 * key.
+	 */
 	public static String transposeKey(String key, int semitones) {
 		if (key == null || key.isBlank() || semitones == 0) {
 			return key;
