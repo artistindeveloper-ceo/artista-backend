@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import com.artist_in.app.service.FileStorageService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,9 +22,11 @@ import lombok.RequiredArgsConstructor;
  * S3 bucket, but this keeps everything self-contained for local development and
  * easy importing into any environment.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/media")
 @RequiredArgsConstructor
+
 public class MediaController {
 
     private final FileStorageService fileStorageService;
@@ -32,9 +35,18 @@ public class MediaController {
     public ResponseEntity<InputStreamResource> getFile(@PathVariable String category, @PathVariable String filename)
             throws IOException {
         String relativePath = category + "/" + filename;
-        InputStream inputStream = fileStorageService.readFile(relativePath);
+        log.info("Fetching media file: {}", relativePath);
+
+        InputStream inputStream;
+        try {
+            inputStream = fileStorageService.readFile(relativePath);
+        } catch (IOException e) {
+            log.error("Failed to read file: {}", relativePath, e);
+            throw e;
+        }
 
         MediaType mediaType = resolveMediaType(filename);
+        log.debug("Resolved media type '{}' for file: {}", mediaType, filename);
 
         return ResponseEntity.ok().contentType(mediaType)
                 .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
@@ -57,6 +69,8 @@ public class MediaController {
             return MediaType.valueOf("video/quicktime");
         if (lower.endsWith(".webm"))
             return MediaType.valueOf("video/webm");
+
+        log.warn("Unrecognized file extension for '{}', defaulting to application/octet-stream", filename);
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 }

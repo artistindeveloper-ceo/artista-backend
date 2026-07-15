@@ -25,9 +25,10 @@ import com.artist_in.app.util.InstrumentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class InstrumentServiceImpl implements InstrumentService {
 	private final InstrumentRepository instrumentRepository;
 	private final UserInstrumentRepository userInstrumentRepository;
@@ -38,13 +39,17 @@ public class InstrumentServiceImpl implements InstrumentService {
 	public InstrumentResponseDTO getInstrumentById(Integer id) {
 		log.debug("Fetching instrument from database: {}", id);
 		Instrument instrument = instrumentRepository.findInstrumentWithDetails(id)
-				.orElseThrow(() -> new RuntimeException("Instrument not found"));
+				.orElseThrow(() -> {
+					log.warn("Instrument {} not found", id);
+					return new RuntimeException("Instrument not found");
+				});
 		return instrumentMapper.toResponseDTO(instrument);
 	}
 
 	@Cacheable(value = "instruments", key = "'all_' + #pageable.pageNumber + '_' + #pageable.pageSize")
 	@Transactional(readOnly = true)
 	public Page<InstrumentResponseDTO> getAllInstruments(Pageable pageable) {
+		log.debug("Fetching all instruments from database, page={}", pageable);
 		Page<Instrument> instruments = instrumentRepository.findAll(pageable);
 		return instruments.map(instrumentMapper::toResponseDTO);
 	}
@@ -52,7 +57,9 @@ public class InstrumentServiceImpl implements InstrumentService {
 	@Cacheable(value = "instruments", key = "'filter_' + #brandName + '_' + #categoryName + '_' + #typeName")
 	@Transactional(readOnly = true)
 	public List<InstrumentResponseDTO> searchInstruments(String brandName, String categoryName, String typeName,
-			BigDecimal minPrice, BigDecimal maxPrice) {
+														 BigDecimal minPrice, BigDecimal maxPrice) {
+		log.debug("Searching instruments from database: brand={}, category={}, type={}, minPrice={}, maxPrice={}",
+				brandName, categoryName, typeName, minPrice, maxPrice);
 		Page<Instrument> instruments = instrumentRepository.findInstrumentsWithFilters(brandName, categoryName,
 				typeName, minPrice, maxPrice, Pageable.unpaged());
 		return instruments.getContent().stream().map(instrumentMapper::toResponseDTO).collect(Collectors.toList());
@@ -61,14 +68,19 @@ public class InstrumentServiceImpl implements InstrumentService {
 	@CacheEvict(value = "instruments", allEntries = true)
 	@Transactional
 	public InstrumentResponseDTO addInstrument(Instrument instrument) {
+		log.info("Adding new instrument: {}", instrument);
 		Instrument saved = instrumentRepository.save(instrument);
+		log.info("Instrument saved with id={}", saved.getId());
 		return instrumentMapper.toResponseDTO(saved);
 	}
 
 	@CacheEvict(value = { "instruments", "userInstruments" }, allEntries = true)
 	@Transactional
 	public UserInstrument addInstrumentToUser(UserInstrumentRequestDTO request) {
+		log.info("Adding instrument {} to user {}", request.getInstrumentId(), request.getUserId());
+
 		if (Boolean.TRUE.equals(request.getIsPrimary())) {
+			log.debug("Clearing existing primary instrument for user {}", request.getUserId());
 			userInstrumentRepository.clearPrimaryInstrument(request.getUserId());
 		}
 
@@ -85,12 +97,15 @@ public class InstrumentServiceImpl implements InstrumentService {
 				.purchaseDate(request.getPurchaseDate()).notes(request.getNotes())
 				.customDetails(request.getCustomDetails()).isActive(true).build();
 
-		return userInstrumentRepository.save(userInstrument);
+		UserInstrument saved = userInstrumentRepository.save(userInstrument);
+		log.info("UserInstrument saved with id={} for user={}", saved.getId(), request.getUserId());
+		return saved;
 	}
 
 	@Cacheable(value = "userInstruments", key = "#userId")
 	@Transactional(readOnly = true)
 	public List<InstrumentResponseDTO> getUserInstruments(Integer userId) {
+		log.debug("Fetching user instruments from database for userId={}", userId);
 		List<UserInstrument> userInstruments = userInstrumentRepository.findUserInstrumentsWithDetails(userId);
 
 		return userInstruments.stream().map(ui -> {
@@ -107,15 +122,17 @@ public class InstrumentServiceImpl implements InstrumentService {
 
 	@Cacheable(value = "instrumentStats", key = "#instrumentId")
 	public InstrumentStats getInstrumentStats(Integer instrumentId) {
+		log.debug("Calculating instrument stats for instrumentId={}", instrumentId);
 		Long totalUsers = userInstrumentRepository.countUsersWithInstrument(instrumentId);
 		// Calculate average rating from reviews...
 		return InstrumentStats.builder().totalUsers(totalUsers).averageRating(4.5) // Example
 				.build();
 	}
 
-	@Cacheable
+	@Cacheable(value = "instrumentsByType", key = "#typeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
 	@Transactional(readOnly = true)
 	public Page<InstrumentResponseDTO> getInstrumentsByType(Integer typeId, Pageable pageable) {
+		log.debug("Fetching instruments by typeId={}, page={}", typeId, pageable);
 		Page<Instrument> instruments = instrumentRepository.findByInstrumentTypeIdAndIsActiveTrue(typeId, pageable);
 		return instruments.map(instrumentMapper::toResponseDTO);
 	}
