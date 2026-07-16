@@ -2,6 +2,7 @@ package com.artist_in.app.serviceimpl;
 
 import com.artist_in.app.service.SongService;
 import com.artist_in.app.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SongServiceImpl implements SongService {
@@ -37,6 +39,7 @@ public class SongServiceImpl implements SongService {
 				.isPublic(request.getIsPublic() == null || request.getIsPublic()).build();
 
 		song = songRepository.save(song);
+		log.info("Song created: id={}, ownerId={}, isPublic={}", song.getId(), ownerId, song.isPublic());
 		return toResponse(song);
 	}
 
@@ -58,6 +61,7 @@ public class SongServiceImpl implements SongService {
 		}
 
 		song = songRepository.save(song);
+		log.info("Song updated: id={}, requesterId={}", song.getId(), requesterId);
 		return toResponse(song);
 	}
 
@@ -67,17 +71,20 @@ public class SongServiceImpl implements SongService {
 		Song song = getSongOrThrow(songId);
 		assertOwner(song, requesterId);
 		songRepository.delete(song);
+		log.info("Song deleted: id={}, requesterId={}", songId, requesterId);
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public SongResponse getSong(Long songId) {
+		log.debug("Fetching songId={}", songId);
 		return toResponse(getSongOrThrow(songId));
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<SongResponse> getMySongs(Long ownerId, Pageable pageable) {
+		log.debug("Fetching songs for ownerId={}, page={}", ownerId, pageable);
 		User owner = userService.getUserOrThrow(ownerId);
 		Page<Song> page = songRepository.findByOwner(owner, pageable);
 		return PageResponse.from(page, this::toResponse);
@@ -86,16 +93,22 @@ public class SongServiceImpl implements SongService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<SongResponse> getPublicSongs(Pageable pageable) {
+		log.debug("Fetching public songs, page={}", pageable);
 		Page<Song> page = songRepository.findByIsPublicTrue(pageable);
 		return PageResponse.from(page, this::toResponse);
 	}
 
 	public Song getSongOrThrow(Long songId) {
-		return songRepository.findById(songId).orElseThrow(() -> ResourceNotFoundException.of("Song", songId));
+		return songRepository.findById(songId).orElseThrow(() -> {
+			log.warn("Song not found, id={}", songId);
+			return ResourceNotFoundException.of("Song", songId);
+		});
 	}
 
 	private void assertOwner(Song song, Long requesterId) {
 		if (!song.getOwner().getId().equals(requesterId)) {
+			log.warn("Forbidden song modification attempt: songId={}, requesterId={}, actualOwnerId={}",
+					song.getId(), requesterId, song.getOwner().getId());
 			throw new ForbiddenException("You can only modify songs in your own library.");
 		}
 	}

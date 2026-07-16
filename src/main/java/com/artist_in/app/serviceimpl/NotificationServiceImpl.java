@@ -1,6 +1,7 @@
 package com.artist_in.app.serviceimpl;
 
 import com.artist_in.app.service.NotificationService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
@@ -27,16 +29,20 @@ public class NotificationServiceImpl implements NotificationService {
 	public void notify(User recipient, User actor, NotificationType type, Long referenceId, String message) {
 		// Don't notify users about their own actions (e.g. liking your own post).
 		if (actor != null && actor.getId().equals(recipient.getId())) {
+			log.debug("Skipping self-notification for userId={}, type={}", recipient.getId(), type);
 			return;
 		}
 		Notification notification = Notification.builder().recipient(recipient).actor(actor).type(type)
 				.referenceId(referenceId).message(message).isRead(false).build();
 		notificationRepository.save(notification);
+		log.info("Notification created: recipientId={}, actorId={}, type={}, referenceId={}", recipient.getId(),
+				actor != null ? actor.getId() : null, type, referenceId);
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<NotificationResponse> getNotifications(User recipient, Pageable pageable) {
+		log.debug("Fetching notifications for recipientId={}, page={}", recipient.getId(), pageable);
 		Page<Notification> page = notificationRepository.findByRecipientOrderByCreatedAtDesc(recipient, pageable);
 		return PageResponse.from(page, this::toResponse);
 	}
@@ -44,13 +50,16 @@ public class NotificationServiceImpl implements NotificationService {
 	@Override
 	@Transactional(readOnly = true)
 	public long getUnreadCount(User recipient) {
+		log.debug("Fetching unread notification count for recipientId={}", recipient.getId());
 		return notificationRepository.countByRecipientAndIsReadFalse(recipient);
 	}
 
 	@Override
 	@Transactional
 	public int markAllRead(User recipient) {
-		return notificationRepository.markAllReadForRecipient(recipient);
+		int updated = notificationRepository.markAllReadForRecipient(recipient);
+		log.info("Marked {} notifications as read for recipientId={}", updated, recipient.getId());
+		return updated;
 	}
 
 	private NotificationResponse toResponse(Notification notification) {

@@ -3,7 +3,9 @@ package com.artist_in.app.serviceimpl;
 import java.time.Instant;
 
 import com.artist_in.app.service.FollowService;
+import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FollowServiceImpl implements FollowService {
@@ -42,13 +45,17 @@ public class FollowServiceImpl implements FollowService {
     @Override
     @Transactional
     public String follow(Long followerId, Long targetId) {
+        log.info("Follow requested: followerId={}, targetId={}", followerId, targetId);
+
         if (followerId.equals(targetId)) {
+            log.warn("User {} attempted to follow themselves", followerId);
             throw new BadRequestException("You cannot follow yourself.");
         }
         User follower = userService.getUserOrThrow(followerId);
         User target = userService.getUserOrThrow(targetId);
 
         if (followRepository.existsByFollowerAndFollowing(follower, target)) {
+            log.debug("User {} already follows user {}", followerId, targetId);
             return "ALREADY_FOLLOWING";
         }
 
@@ -56,6 +63,7 @@ public class FollowServiceImpl implements FollowService {
             followRequestRepository.findByRequesterAndTarget(follower, target)
                     .filter(req -> req.getStatus() == FollowRequestStatus.PENDING)
                     .ifPresent(req -> {
+                        log.warn("Duplicate follow request from user {} to user {}", followerId, targetId);
                         throw new BadRequestException("A follow request is already pending for this user.");
                     });
 
@@ -70,6 +78,8 @@ public class FollowServiceImpl implements FollowService {
                             .status(FollowRequestStatus.PENDING)
                             .build());
             followRequestRepository.save(request);
+            log.info("Follow request created/updated: id={}, requester={}, target={}",
+                    request.getId(), followerId, targetId);
 
             notificationService.notify(target, follower, NotificationType.FOLLOW_REQUEST_RECEIVED,
                     request.getId(), follower.getDisplayName() + " requested to follow you.");
@@ -77,28 +87,40 @@ public class FollowServiceImpl implements FollowService {
         }
 
         createFollowRelationship(follower, target);
+        log.info("User {} started following user {}", followerId, targetId);
         notificationService.notify(target, follower, NotificationType.NEW_FOLLOWER,
                 follower.getId(), follower.getDisplayName() + " started following you.");
         return "FOLLOWING";
     }
+
     @Override
     @Transactional
     public void unfollow(Long followerId, Long targetId) {
+        log.info("Unfollow requested: followerId={}, targetId={}", followerId, targetId);
         User follower = userService.getUserOrThrow(followerId);
         User target = userService.getUserOrThrow(targetId);
         followRepository.deleteByFollowerAndFollowing(follower, target);
+        log.info("User {} unfollowed user {}", followerId, targetId);
     }
 
     @Override
     @Transactional
     public FollowRequestResponse acceptFollowRequest(Long targetUserId, Long requestId) {
+        log.info("Accept follow request: targetUserId={}, requestId={}", targetUserId, requestId);
+
         FollowRequest request = followRequestRepository.findById(requestId)
-                .orElseThrow(() -> ResourceNotFoundException.of("FollowRequest", requestId));
+                .orElseThrow(() -> {
+                    log.warn("Follow request {} not found", requestId);
+                    return ResourceNotFoundException.of("FollowRequest", requestId);
+                });
 
         if (!request.getTarget().getId().equals(targetUserId)) {
+            log.warn("User {} attempted to accept a follow request {} that doesn't belong to them",
+                    targetUserId, requestId);
             throw new BadRequestException("This follow request does not belong to you.");
         }
         if (request.getStatus() != FollowRequestStatus.PENDING) {
+            log.warn("Follow request {} already resolved with status {}", requestId, request.getStatus());
             throw new BadRequestException("This follow request has already been resolved.");
         }
 
@@ -106,6 +128,8 @@ public class FollowServiceImpl implements FollowService {
         followRequestRepository.save(request);
 
         createFollowRelationship(request.getRequester(), request.getTarget());
+        log.info("Follow request {} accepted, relationship created between {} and {}",
+                requestId, request.getRequester().getId(), request.getTarget().getId());
 
         notificationService.notify(request.getRequester(), request.getTarget(),
                 NotificationType.FOLLOW_REQUEST_ACCEPTED, request.getTarget().getId(),
@@ -117,24 +141,34 @@ public class FollowServiceImpl implements FollowService {
     @Override
     @Transactional
     public FollowRequestResponse rejectFollowRequest(Long targetUserId, Long requestId) {
+        log.info("Reject follow request: targetUserId={}, requestId={}", targetUserId, requestId);
+
         FollowRequest request = followRequestRepository.findById(requestId)
-                .orElseThrow(() -> ResourceNotFoundException.of("FollowRequest", requestId));
+                .orElseThrow(() -> {
+                    log.warn("Follow request {} not found", requestId);
+                    return ResourceNotFoundException.of("FollowRequest", requestId);
+                });
 
         if (!request.getTarget().getId().equals(targetUserId)) {
+            log.warn("User {} attempted to reject a follow request {} that doesn't belong to them",
+                    targetUserId, requestId);
             throw new BadRequestException("This follow request does not belong to you.");
         }
         if (request.getStatus() != FollowRequestStatus.PENDING) {
+            log.warn("Follow request {} already resolved with status {}", requestId, request.getStatus());
             throw new BadRequestException("This follow request has already been resolved.");
         }
 
         request.setStatus(FollowRequestStatus.REJECTED);
         followRequestRepository.save(request);
+        log.info("Follow request {} rejected", requestId);
         return toResponse(request);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponse<FollowRequestResponse> getPendingRequestsForUser(Long userId, Pageable pageable) {
+        log.debug("Fetching pending follow requests for user {}, page={}", userId, pageable);
         User user = userService.getUserOrThrow(userId);
         Page<FollowRequest> page = followRequestRepository
                 .findByTargetAndStatus(user, FollowRequestStatus.PENDING, pageable);
@@ -144,6 +178,7 @@ public class FollowServiceImpl implements FollowService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<UserSummaryResponse> getFollowers(Long userId, Pageable pageable) {
+        log.debug("Fetching followers for user {}, page={}", userId, pageable);
         User user = userService.getUserOrThrow(userId);
         Page<Follow> page = followRepository.findByFollowing(user, pageable);
         return PageResponse.from(page, follow -> UserMapper.toSummary(follow.getFollower()));
@@ -152,7 +187,7 @@ public class FollowServiceImpl implements FollowService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<UserSummaryResponse> getFollowing(Long userId, Pageable pageable) {
-    	System.out.println("Sorting criteria received: " + pageable.getSort());
+        log.debug("Fetching following list for user {}, page={}, sort={}", userId, pageable, pageable.getSort());
         User user = userService.getUserOrThrow(userId);
         Page<Follow> page = followRepository.findByFollower(user, pageable);
         return PageResponse.from(page, follow -> UserMapper.toSummary(follow.getFollowing()));
@@ -176,4 +211,5 @@ public class FollowServiceImpl implements FollowService {
                 .createdAt(request.getCreatedAt())
                 .build();
     }
+
 }

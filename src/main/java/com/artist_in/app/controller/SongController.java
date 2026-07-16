@@ -1,5 +1,6 @@
 package com.artist_in.app.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import com.artist_in.app.service.SongService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/songs")
 @RequiredArgsConstructor
@@ -32,36 +34,44 @@ public class SongController {
 	@PostMapping
 	public ResponseEntity<SongResponse> createSong(@Valid @RequestBody CreateSongRequest request) {
 		Long userId = SecurityUtils.getCurrentUserId();
-		return ResponseEntity.status(HttpStatus.CREATED).body(songService.createSong(userId, request));
+		log.info("Creating song for userId={}", userId);
+		SongResponse response = songService.createSong(userId, request);
+		log.info("Song created: id={}, userId={}", response.getId(), userId);
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 
 	@PutMapping("/{songId}")
 	public ResponseEntity<SongResponse> updateSong(@PathVariable Long songId,
-			@Valid @RequestBody CreateSongRequest request) {
+												   @Valid @RequestBody CreateSongRequest request) {
 		Long userId = SecurityUtils.getCurrentUserId();
+		log.info("Updating songId={} requested by userId={}", songId, userId);
 		return ResponseEntity.ok(songService.updateSong(songId, userId, request));
 	}
 
 	@DeleteMapping("/{songId}")
 	public ResponseEntity<MessageResponse> deleteSong(@PathVariable Long songId) {
 		Long userId = SecurityUtils.getCurrentUserId();
+		log.info("Deleting songId={} requested by userId={}", songId, userId);
 		songService.deleteSong(songId, userId);
 		return ResponseEntity.ok(MessageResponse.of("Song deleted successfully."));
 	}
 
 	@GetMapping("/{songId}")
 	public ResponseEntity<SongResponse> getSong(@PathVariable Long songId) {
+		log.debug("Fetching songId={}", songId);
 		return ResponseEntity.ok(songService.getSong(songId));
 	}
 
 	@GetMapping("/mine")
 	public ResponseEntity<PageResponse<SongResponse>> getMySongs(Pageable pageable) {
 		Long userId = SecurityUtils.getCurrentUserId();
+		log.debug("Fetching own songs for userId={}, page={}", userId, pageable);
 		return ResponseEntity.ok(songService.getMySongs(userId, pageable));
 	}
 
 	@GetMapping("/public")
 	public ResponseEntity<PageResponse<SongResponse>> getPublicSongs(Pageable pageable) {
+		log.debug("Fetching public songs, page={}", pageable);
 		return ResponseEntity.ok(songService.getPublicSongs(pageable));
 	}
 }

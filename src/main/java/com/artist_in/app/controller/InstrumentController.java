@@ -3,6 +3,7 @@ package com.artist_in.app.controller;
 import java.math.BigDecimal;
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,20 +26,25 @@ import com.artist_in.app.service.InstrumentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/instruments")
 @RequiredArgsConstructor
+
+// adjust if your base path differs
 public class InstrumentController {
 	private final InstrumentService instrumentService;
 
 	@GetMapping("/{id}")
 	public ResponseEntity<InstrumentResponseDTO> getInstrument(@PathVariable Integer id) {
+		log.debug("Fetching instrument with id={}", id);
 		return ResponseEntity.ok(instrumentService.getInstrumentById(id));
 	}
 
 	@GetMapping
 	public ResponseEntity<Page<InstrumentResponseDTO>> getAllInstruments(
 			@PageableDefault(size = 20, sort = "id") Pageable pageable) {
+		log.debug("Fetching all instruments, page={}", pageable);
 		return ResponseEntity.ok(instrumentService.getAllInstruments(pageable));
 	}
 
@@ -47,27 +53,34 @@ public class InstrumentController {
 			@RequestParam(required = false) String brandName, @RequestParam(required = false) String categoryName,
 			@RequestParam(required = false) String typeName, @RequestParam(required = false) BigDecimal minPrice,
 			@RequestParam(required = false) BigDecimal maxPrice) {
+		log.debug("Searching instruments: brand={}, category={}, type={}, minPrice={}, maxPrice={}",
+				brandName, categoryName, typeName, minPrice, maxPrice);
 		return ResponseEntity
 				.ok(instrumentService.searchInstruments(brandName, categoryName, typeName, minPrice, maxPrice));
 	}
 
 	@GetMapping("/user/{userId}")
 	public ResponseEntity<List<InstrumentResponseDTO>> getUserInstruments(@PathVariable Integer userId) {
+		log.debug("Fetching instruments for userId={}", userId);
 		return ResponseEntity.ok(instrumentService.getUserInstruments(userId));
 	}
 
 	@PostMapping("/user/add")
 	public ResponseEntity<UserInstrument> addInstrumentToUser(@Valid @RequestBody UserInstrumentRequestDTO request,
-			Authentication authentication) {
+															  Authentication authentication) {
 		UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
 		Long userId = principal.getUser().getId(); // ya principal.getId() — file dekh ke confirm karunga
+		log.info("Adding instrument to user {}: request={}", userId, request);
 		request.setUserId(userId);
-		return ResponseEntity.ok(instrumentService.addInstrumentToUser(request));
+		UserInstrument result = instrumentService.addInstrumentToUser(request);
+		log.info("Instrument added successfully for user {}, resultId={}", userId, result.getId());
+		return ResponseEntity.ok(result);
 	}
 
 	@GetMapping("/by-type")
 	public ResponseEntity<Page<InstrumentResponseDTO>> getInstrumentsByType(@RequestParam Integer typeId,
-			@PageableDefault(size = 20, sort = "model") Pageable pageable) {
+																			@PageableDefault(size = 20, sort = "model") Pageable pageable) {
+		log.debug("Fetching instruments by typeId={}, page={}", typeId, pageable);
 		return ResponseEntity.ok(instrumentService.getInstrumentsByType(typeId, pageable));
 	}
 }

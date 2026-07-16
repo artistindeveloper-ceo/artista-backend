@@ -19,11 +19,13 @@ import com.artist_in.app.service.UserService;
 import com.artist_in.app.util.UserMapper;
 import com.artist_in.app.websocket.ChatMessageEventPublisher;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MessageServiceImpl implements MessageService {
@@ -36,6 +38,7 @@ public class MessageServiceImpl implements MessageService {
 	@Transactional
 	public Conversation getOrCreateConversation(Long userIdA, Long userIdB) {
 		if (userIdA.equals(userIdB)) {
+			log.warn("Rejected attempt to start conversation with self, userId={}", userIdA);
 			throw new BadRequestException("You cannot start a conversation with yourself.");
 		}
 		User userA = userService.getUserOrThrow(userIdA);
@@ -46,11 +49,16 @@ public class MessageServiceImpl implements MessageService {
 		User second = userA.getId() < userB.getId() ? userB : userA;
 
 		return conversationRepository.findByUserAAndUserB(first, second).orElseGet(
-				() -> conversationRepository.save(Conversation.builder().userA(first).userB(second).build()));
+				() -> {
+					log.info("Creating new conversation between userId={} and userId={}", first.getId(), second.getId());
+					return conversationRepository.save(Conversation.builder().userA(first).userB(second).build());
+				});
 	}
 
+	@Override
 	@Transactional
 	public ChatMessageResponse sendMessage(Long senderId, Long recipientId, SendMessageRequest request) {
+		log.info("Processing sendMessage from senderId={} to recipientId={}", senderId, recipientId);
 		Conversation conversation = getOrCreateConversation(senderId, recipientId);
 		User sender = userService.getUserOrThrow(senderId);
 		User recipient = userService.getUserOrThrow(recipientId);
@@ -58,6 +66,7 @@ public class MessageServiceImpl implements MessageService {
 		ChatMessage message = ChatMessage.builder().conversation(conversation).sender(sender)
 				.content(request.getContent()).attachmentUrl(request.getAttachmentUrl()).isRead(false).build();
 		message = chatMessageRepository.save(message);
+		log.debug("Saved chatMessage id={} in conversationId={}", message.getId(), conversation.getId());
 
 		conversation.setLastMessageAt(message.getCreatedAt());
 		conversation.setLastMessagePreview(
@@ -66,14 +75,18 @@ public class MessageServiceImpl implements MessageService {
 
 		notificationService.notify(recipient, sender, NotificationType.NEW_MESSAGE, conversation.getId(),
 				sender.getDisplayName() + " sent you a message.");
+		log.debug("Notification dispatched to recipientId={} for conversationId={}", recipientId, conversation.getId());
 
 		ChatMessageResponse response = toResponse(message);
 		chatMessageEventPublisher.publishToUser(recipient.getUsername(), response);
+		log.info("Message id={} sent successfully in conversationId={}", message.getId(), conversation.getId());
 		return response;
 	}
 
+	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<ChatMessageResponse> getMessages(Long conversationId, Long requesterId, Pageable pageable) {
+		log.debug("Fetching messages for conversationId={}, requesterId={}, page={}", conversationId, requesterId, pageable);
 		Conversation conversation = getConversationOrThrow(conversationId);
 		assertParticipant(conversation, requesterId);
 
@@ -82,15 +95,19 @@ public class MessageServiceImpl implements MessageService {
 		return PageResponse.from(page, this::toResponse);
 	}
 
+	@Override
 	@Transactional
 	public void markConversationRead(Long conversationId, Long readerId) {
+		log.info("Marking conversationId={} as read for readerId={}", conversationId, readerId);
 		Conversation conversation = getConversationOrThrow(conversationId);
 		assertParticipant(conversation, readerId);
 		chatMessageRepository.markConversationReadForUser(conversation, readerId);
 	}
 
+	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<ConversationResponse> getConversations(Long userId, Pageable pageable) {
+		log.debug("Fetching conversations for userId={}, page={}", userId, pageable);
 		User user = userService.getUserOrThrow(userId);
 		Page<Conversation> page = conversationRepository.findAllForUser(user, pageable);
 		return PageResponse.from(page, conv -> toConversationResponse(conv, userId));
@@ -98,13 +115,18 @@ public class MessageServiceImpl implements MessageService {
 
 	private Conversation getConversationOrThrow(Long conversationId) {
 		return conversationRepository.findById(conversationId)
-				.orElseThrow(() -> ResourceNotFoundException.of("Conversation", conversationId));
+				.orElseThrow(() -> {
+					log.warn("Conversation not found, id={}", conversationId);
+					return ResourceNotFoundException.of("Conversation", conversationId);
+				});
 	}
 
 	private void assertParticipant(Conversation conversation, Long userId) {
 		boolean isParticipant = conversation.getUserA().getId().equals(userId)
 				|| conversation.getUserB().getId().equals(userId);
 		if (!isParticipant) {
+			log.warn("Forbidden access attempt: userId={} is not a participant in conversationId={}", userId,
+					conversation.getId());
 			throw new ForbiddenException("You are not a participant in this conversation.");
 		}
 	}
@@ -128,8 +150,10 @@ public class MessageServiceImpl implements MessageService {
 				.build();
 	}
 
+	@Override
 	@Transactional(readOnly = true)
 	public long getTotalUnreadCount(Long userId) {
+		log.debug("Fetching total unread count for userId={}", userId);
 		return chatMessageRepository.countTotalUnreadForUser(userId);
 	}
 }
