@@ -8,6 +8,7 @@ import java.util.stream.Stream;
 import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.service.PostService;
 import com.artist_in.app.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PostServiceImpl implements PostService {
 
 	private final PostRepository postRepository;
@@ -44,19 +46,21 @@ public class PostServiceImpl implements PostService {
 	@Override
 	@Transactional
 	public PostResponse createPost(Long authorId, CreatePostRequest request, String mediaUrl, String thumbnailUrl,
-			MediaType mediaType) {
+								   MediaType mediaType) {
 		User author = userService.getUserOrThrow(authorId);
 
 		Post post = Post.builder().author(author).caption(request.getCaption()).mediaUrl(mediaUrl)
 				.thumbnailUrl(thumbnailUrl).mediaType(mediaType == null ? MediaType.NONE : mediaType).build();
 
 		post = postRepository.save(post);
+		log.info("Post created: id={}, authorId={}, mediaType={}", post.getId(), authorId, post.getMediaType());
 		return toResponse(post, authorId);
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public PostResponse getPost(Long postId, Long viewerId) {
+		log.debug("Fetching postId={} for viewerId={}", postId, viewerId);
 		Post post = getPostOrThrow(postId);
 		return toResponse(post, viewerId);
 	}
@@ -64,6 +68,7 @@ public class PostServiceImpl implements PostService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<PostResponse> getUserPosts(Long targetUserId, Long viewerId, Pageable pageable) {
+		log.debug("Fetching posts for targetUserId={}, viewerId={}, page={}", targetUserId, viewerId, pageable);
 		User target = userService.getUserOrThrow(targetUserId);
 		Page<Post> page = postRepository.findByAuthorAndIsArchivedFalseOrderByCreatedAtDesc(target, pageable);
 		return PageResponse.from(page, post -> toResponse(post, viewerId));
@@ -73,6 +78,7 @@ public class PostServiceImpl implements PostService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<PostResponse> getFeed(Long viewerId, Pageable pageable) {
+		log.debug("Building feed for viewerId={}, page={}", viewerId, pageable);
 		User viewer = userService.getUserOrThrow(viewerId);
 		Page<Follow> following = followRepository.findByFollower(viewer, Pageable.unpaged());
 
@@ -93,6 +99,7 @@ public class PostServiceImpl implements PostService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<PostResponse> getExploreFeed(Long viewerId, Pageable pageable) {
+		log.debug("Building explore feed for viewerId={}, page={}", viewerId, pageable);
 		User viewer = userService.getUserOrThrow(viewerId);
 
 		Page<Follow> following = followRepository.findByFollower(viewer, Pageable.unpaged());
@@ -109,9 +116,12 @@ public class PostServiceImpl implements PostService {
 	public void deletePost(Long postId, Long requesterId) {
 		Post post = getPostOrThrow(postId);
 		if (!post.getAuthor().getId().equals(requesterId)) {
+			log.warn("Forbidden delete attempt: postId={} by requesterId={} (author is {})", postId, requesterId,
+					post.getAuthor().getId());
 			throw new ForbiddenException("You can only delete your own posts.");
 		}
 		postRepository.delete(post);
+		log.info("Post deleted: id={}, requesterId={}", postId, requesterId);
 	}
 
 	@Override
@@ -125,12 +135,14 @@ public class PostServiceImpl implements PostService {
 			postLikeRepository.deleteByPostAndUser(post, user);
 			post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
 			postRepository.save(post);
+			log.debug("Post unliked: postId={}, userId={}, newLikeCount={}", postId, userId, post.getLikeCount());
 			return false;
 		} else {
 			PostLike like = PostLike.builder().post(post).user(user).createdAt(Instant.now()).build();
 			postLikeRepository.save(like);
 			post.setLikeCount(post.getLikeCount() + 1);
 			postRepository.save(post);
+			log.debug("Post liked: postId={}, userId={}, newLikeCount={}", postId, userId, post.getLikeCount());
 
 			notificationService.notify(post.getAuthor(), user, NotificationType.POST_LIKED, post.getId(),
 					user.getDisplayName() + " liked your post.");
@@ -139,7 +151,10 @@ public class PostServiceImpl implements PostService {
 	}
 
 	public Post getPostOrThrow(Long postId) {
-		return postRepository.findById(postId).orElseThrow(() -> ResourceNotFoundException.of("Post", postId));
+		return postRepository.findById(postId).orElseThrow(() -> {
+			log.warn("Post not found, id={}", postId);
+			return ResourceNotFoundException.of("Post", postId);
+		});
 	}
 
 	private PostResponse toResponse(Post post, Long viewerId) {
@@ -160,10 +175,12 @@ public class PostServiceImpl implements PostService {
 
 		// Apni khud ki post dekhne pe view count nahi badhna chahiye
 		if (viewerId != null && post.getAuthor().getId().equals(viewerId)) {
+			log.debug("Skipping view increment: postId={} viewed by own author, viewerId={}", postId, viewerId);
 			return;
 		}
 
 		postRepository.incrementViewCount(postId);
 	}
+
 
 }

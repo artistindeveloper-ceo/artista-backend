@@ -42,12 +42,18 @@ public class FileStorageServiceImpl implements FileStorageService {
 		validateNotEmpty(file);
 		String extension = extractExtension(file.getOriginalFilename());
 		if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension.toLowerCase())) {
+			log.warn("Rejected image upload with unsupported extension '{}' for category {}", extension, category);
 			throw new BadRequestException("Unsupported image type. Allowed: " + ALLOWED_IMAGE_EXTENSIONS);
 		}
 		if (file.getSize() > uploadProperties.getMaxImageSizeBytes()) {
+			log.warn("Rejected image upload exceeding max size: {} bytes (limit {}) for category {}",
+					file.getSize(), uploadProperties.getMaxImageSizeBytes(), category);
 			throw new BadRequestException("Image exceeds the maximum allowed size.");
 		}
-		return store(file, category, extension);
+		log.info("Storing image upload for category {} (size={} bytes, ext={})", category, file.getSize(), extension);
+		String url = store(file, category, extension);
+		log.info("Image stored successfully: {}", url);
+		return url;
 	}
 
 	/**
@@ -59,11 +65,16 @@ public class FileStorageServiceImpl implements FileStorageService {
 		validateNotEmpty(file);
 		String extension = extractExtension(file.getOriginalFilename());
 		if (!ALLOWED_VIDEO_EXTENSIONS.contains(extension.toLowerCase())) {
+			log.warn("Rejected video upload with unsupported extension '{}' for category {}", extension, category);
 			throw new BadRequestException("Unsupported video type. Allowed: " + ALLOWED_VIDEO_EXTENSIONS);
 		}
 		if (file.getSize() > uploadProperties.getMaxVideoSizeBytes()) {
+			log.warn("Rejected video upload exceeding max size: {} bytes (limit {}) for category {}",
+					file.getSize(), uploadProperties.getMaxVideoSizeBytes(), category);
 			throw new BadRequestException("Video exceeds the maximum allowed size.");
 		}
+
+		log.info("Storing video upload for category {} (size={} bytes, ext={})", category, file.getSize(), extension);
 
 		try {
 			Path categoryDir = Paths.get(uploadProperties.getBaseDir(), category.name().toLowerCase());
@@ -75,6 +86,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 			try (InputStream in = file.getInputStream()) {
 				Files.copy(in, rawPath, StandardCopyOption.REPLACE_EXISTING);
 			}
+			log.debug("Raw video saved to: {}", rawPath);
 
 			// 2. Compress karo (H.264, max 720p height, reasonable bitrate)
 			String compressedFilename = UUID.randomUUID() + ".mp4";
@@ -89,6 +101,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 				finalVideoPath = compressedPath;
 				finalVideoFilename = compressedFilename;
 				Files.deleteIfExists(rawPath); // raw ab zaroorat nahi
+				log.debug("Video compressed successfully: {}", compressedPath);
 			} else {
 				log.warn("Video compression failed, falling back to raw upload for: {}", rawFilename);
 				finalVideoPath = rawPath;
@@ -99,6 +112,9 @@ public class FileStorageServiceImpl implements FileStorageService {
 			String thumbFilename = UUID.randomUUID() + "_thumb.jpg";
 			Path thumbPath = categoryDir.resolve(thumbFilename);
 			boolean thumbGenerated = generateThumbnail(finalVideoPath, thumbPath);
+			if (!thumbGenerated) {
+				log.warn("Thumbnail generation failed for video: {}", finalVideoFilename);
+			}
 
 			String videoRelativePath = category.name().toLowerCase() + "/" + finalVideoFilename;
 			String videoUrl = uploadProperties.getBaseUrl() + "/" + videoRelativePath;
@@ -109,8 +125,10 @@ public class FileStorageServiceImpl implements FileStorageService {
 				thumbnailUrl = uploadProperties.getBaseUrl() + "/" + thumbRelativePath;
 			}
 
+			log.info("Video stored successfully: {} (thumbnail: {})", videoUrl, thumbnailUrl);
 			return new VideoStoreResult(videoUrl, thumbnailUrl);
 		} catch (IOException ex) {
+			log.error("Failed to store uploaded video for category {}", category, ex);
 			throw new RuntimeException("Failed to store uploaded video.", ex);
 		}
 	}
@@ -136,7 +154,11 @@ public class FileStorageServiceImpl implements FileStorageService {
 				log.error("FFmpeg compression timed out for: {}", input);
 				return false;
 			}
-			return process.exitValue() == 0;
+			int exitCode = process.exitValue();
+			if (exitCode != 0) {
+				log.warn("FFmpeg compression exited with non-zero code {} for: {}", exitCode, input);
+			}
+			return exitCode == 0;
 		} catch (IOException | InterruptedException ex) {
 			log.error("FFmpeg compression failed for: {}", input, ex);
 			return false;
@@ -162,7 +184,11 @@ public class FileStorageServiceImpl implements FileStorageService {
 				log.error("Thumbnail generation timed out for: {}", videoPath);
 				return false;
 			}
-			return process.exitValue() == 0;
+			int exitCode = process.exitValue();
+			if (exitCode != 0) {
+				log.warn("Thumbnail generation exited with non-zero code {} for: {}", exitCode, videoPath);
+			}
+			return exitCode == 0;
 		} catch (IOException | InterruptedException ex) {
 			log.error("Thumbnail generation failed for: {}", videoPath, ex);
 			return false;
@@ -177,6 +203,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 	public StoredMedia storeMedia(MultipartFile file, UploadCategory category) {
 		validateNotEmpty(file);
 		String extension = extractExtension(file.getOriginalFilename()).toLowerCase();
+		log.debug("Detected extension '{}' for storeMedia upload in category {}", extension, category);
 
 		if (ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
 			return new StoredMedia(storeImage(file, category), null, MediaType.IMAGE);
@@ -184,6 +211,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 			VideoStoreResult result = storeVideo(file, category);
 			return new StoredMedia(result.videoUrl(), result.thumbnailUrl(), MediaType.VIDEO);
 		} else {
+			log.warn("Rejected storeMedia upload with unsupported extension '{}' for category {}", extension, category);
 			throw new BadRequestException("Unsupported file type. Allowed images: " + ALLOWED_IMAGE_EXTENSIONS
 					+ ", allowed videos: " + ALLOWED_VIDEO_EXTENSIONS);
 		}
@@ -195,12 +223,15 @@ public class FileStorageServiceImpl implements FileStorageService {
 	public Path resolvePath(String relativePath) {
 		return Paths.get(uploadProperties.getBaseDir()).resolve(relativePath).normalize();
 	}
+
 	@Override
 	public InputStream readFile(String relativePath) throws IOException {
 		Path path = resolvePath(relativePath);
 		if (!Files.exists(path)) {
+			log.warn("Requested file not found: {}", relativePath);
 			throw new java.io.FileNotFoundException("File not found: " + relativePath);
 		}
+		log.debug("Reading file: {}", path);
 		return Files.newInputStream(path);
 	}
 
@@ -217,20 +248,24 @@ public class FileStorageServiceImpl implements FileStorageService {
 			}
 
 			String relativePath = category.name().toLowerCase() + "/" + filename;
+			log.debug("File written to disk: {}", destination);
 			return uploadProperties.getBaseUrl() + "/" + relativePath;
 		} catch (IOException ex) {
+			log.error("Failed to store uploaded file for category {}", category, ex);
 			throw new RuntimeException("Failed to store uploaded file.", ex);
 		}
 	}
 
 	private void validateNotEmpty(MultipartFile file) {
 		if (file == null || file.isEmpty()) {
+			log.warn("Rejected upload: file is null or empty");
 			throw new BadRequestException("Uploaded file is empty.");
 		}
 	}
 
 	private String extractExtension(String originalFilename) {
 		if (!StringUtils.hasText(originalFilename) || !originalFilename.contains(".")) {
+			log.warn("Rejected upload: missing or invalid filename '{}'", originalFilename);
 			throw new BadRequestException("Uploaded file must have a valid extension.");
 		}
 		return originalFilename.substring(originalFilename.lastIndexOf('.') + 1);

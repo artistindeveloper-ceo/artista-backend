@@ -8,6 +8,7 @@ import java.util.Optional;
 import com.artist_in.app.service.JamSessionService;
 import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,7 +44,7 @@ import com.artist_in.app.util.UserMapper;
 import com.artist_in.app.websocket.JamSessionEventPublisher;
 
 import lombok.RequiredArgsConstructor;
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JamSessionServiceImpl implements JamSessionService {
@@ -65,6 +66,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 	@Override
 	@Transactional
 	public JamSessionResponse createSession(Long leaderId, CreateJamSessionRequest request) {
+		log.info("Creating jam session for leaderId={}, name={}", leaderId, request.getName());
 		User leader = userService.getUserOrThrow(leaderId);
 
 		JamSession session = JamSession.builder().name(request.getName()).description(request.getDescription())
@@ -73,6 +75,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 				.isPrivate(request.getIsPrivate() == null || request.getIsPrivate()).build();
 
 		session = jamSessionRepository.save(session);
+		log.info("Jam session created: id={}, inviteCode={}", session.getId(), session.getInviteCode());
 
 		// Leader automatically joins as a participant with LEADER role.
 		addParticipant(session, leader, ParticipantRole.LEADER);
@@ -86,6 +89,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 						.build();
 				jamSessionSongRepository.save(jss);
 			}
+			log.debug("Added {} initial songs to session {}", request.getInitialSongIds().size(), session.getId());
 		}
 
 		return toResponse(session);
@@ -94,20 +98,26 @@ public class JamSessionServiceImpl implements JamSessionService {
 	@Override
 	@Transactional(readOnly = true)
 	public JamSessionResponse getSession(Long sessionId) {
+		log.debug("Fetching jam session {}", sessionId);
 		return toResponse(getSessionOrThrow(sessionId));
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public JamSessionResponse getSessionByInviteCode(String inviteCode) {
+		log.debug("Fetching jam session by invite code={}", inviteCode);
 		JamSession session = jamSessionRepository.findByInviteCode(inviteCode.toUpperCase())
-				.orElseThrow(() -> new ResourceNotFoundException("No jam session found with that invite code."));
+				.orElseThrow(() -> {
+					log.warn("No jam session found with invite code={}", inviteCode);
+					return new ResourceNotFoundException("No jam session found with that invite code.");
+				});
 		return toResponse(session);
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<JamSessionResponse> getMySessions(Long leaderId, Pageable pageable) {
+		log.debug("Fetching sessions for leaderId={}, page={}", leaderId, pageable);
 		User leader = userService.getUserOrThrow(leaderId);
 		Page<JamSession> page = jamSessionRepository.findByLeader(leader, pageable);
 		return PageResponse.from(page, this::toResponse);
@@ -117,12 +127,18 @@ public class JamSessionServiceImpl implements JamSessionService {
 	 * Join a session as a musician (or rejoin if previously left). Broadcasts
 	 * PARTICIPANT_JOINED.
 	 */
+	@Override
 	@Transactional
 	public JamSessionResponse joinSession(String inviteCode, Long userId) {
+		log.info("User {} joining session via invite code={}", userId, inviteCode);
 		JamSession session = jamSessionRepository.findByInviteCode(inviteCode.toUpperCase())
-				.orElseThrow(() -> new ResourceNotFoundException("No jam session found with that invite code."));
+				.orElseThrow(() -> {
+					log.warn("No jam session found with invite code={}", inviteCode);
+					return new ResourceNotFoundException("No jam session found with that invite code.");
+				});
 
 		if (session.getStatus() == JamSessionStatus.ENDED || session.getStatus() == JamSessionStatus.CANCELLED) {
+			log.warn("User {} attempted to join ended/cancelled session {}", userId, session.getId());
 			throw new BadRequestException("This jam session has already ended.");
 		}
 
@@ -134,6 +150,8 @@ public class JamSessionServiceImpl implements JamSessionService {
 					existing.setJoinedAt(Instant.now());
 					return participantRepository.save(existing);
 				}).orElseGet(() -> addParticipant(session, user, ParticipantRole.MUSICIAN));
+
+		log.info("User {} joined session {} as participantId={}", userId, session.getId(), participant.getId());
 
 		JamSessionResponse response = toResponse(session);
 
@@ -151,31 +169,39 @@ public class JamSessionServiceImpl implements JamSessionService {
 		return response;
 	}
 
+	@Override
 	@Transactional
 	public void leaveSession(Long sessionId, Long userId) {
+		log.info("User {} leaving session {}", userId, sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		User user = userService.getUserOrThrow(userId);
 
 		JamSessionParticipant participant = participantRepository.findByJamSessionAndUser(session, user)
-				.orElseThrow(() -> new ResourceNotFoundException("You are not a participant in this session."));
+				.orElseThrow(() -> {
+					log.warn("User {} attempted to leave session {} they are not a participant of", userId, sessionId);
+					return new ResourceNotFoundException("You are not a participant in this session.");
+				});
 
 		participant.setActive(false);
 		participant.setLeftAt(Instant.now());
 		participantRepository.save(participant);
+		log.info("User {} left session {}", userId, sessionId);
 
 		eventPublisher.publish(sessionId,
 				JamSessionEvent.builder().eventType(JamSessionEvent.EventType.PARTICIPANT_LEFT)
 						.participant(toParticipantResponse(participant)).build());
 	}
-
+	@Override
 	@Transactional
 	public JamSessionResponse startSession(Long sessionId, Long requesterId) {
+		log.info("User {} starting session {}", requesterId, sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		assertLeaderOrCoLeader(session, requesterId);
 
 		session.setStatus(JamSessionStatus.LIVE);
 		session.setStartedAt(Instant.now());
 		session = jamSessionRepository.save(session);
+		log.info("Session {} is now LIVE", sessionId);
 
 		eventPublisher.publish(sessionId, JamSessionEvent.builder().eventType(JamSessionEvent.EventType.SESSION_STARTED)
 				.message(session.getLeader().getDisplayName() + " started the jam session.").build());
@@ -183,14 +209,17 @@ public class JamSessionServiceImpl implements JamSessionService {
 		return toResponse(session);
 	}
 
+	@Override
 	@Transactional
 	public JamSessionResponse endSession(Long sessionId, Long requesterId) {
+		log.info("User {} ending session {}", requesterId, sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		assertLeaderOrCoLeader(session, requesterId);
 
 		session.setStatus(JamSessionStatus.ENDED);
 		session.setEndedAt(Instant.now());
 		session = jamSessionRepository.save(session);
+		log.info("Session {} has ENDED", sessionId);
 
 		eventPublisher.publish(sessionId, JamSessionEvent.builder().eventType(JamSessionEvent.EventType.SESSION_ENDED)
 				.message("The jam session has ended.").build());
@@ -202,8 +231,10 @@ public class JamSessionServiceImpl implements JamSessionService {
 	 * Leader invites another musician directly (creates a notification, doesn't
 	 * auto-add them as participant).
 	 */
+	@Override
 	@Transactional
 	public void inviteToSession(Long sessionId, Long requesterId, Long inviteeId) {
+		log.info("User {} inviting user {} to session {}", requesterId, inviteeId, sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		assertLeaderOrCoLeader(session, requesterId);
 		User invitee = userService.getUserOrThrow(inviteeId);
@@ -211,9 +242,10 @@ public class JamSessionServiceImpl implements JamSessionService {
 		notificationService.notify(invitee, session.getLeader(), NotificationType.JAM_SESSION_INVITE, session.getId(),
 				session.getLeader().getDisplayName() + " invited you to jam session \"" + session.getName() + "\".");
 	}
-
+@Override
 	@Transactional
 	public JamSessionSongResponse addSongToSetlist(Long sessionId, Long requesterId, AddSongToSetlistRequest request) {
+		log.info("User {} adding song {} to setlist for session {}", requesterId, request.getSongId(), sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		assertLeaderOrCoLeader(session, requesterId);
 
@@ -224,6 +256,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 		boolean alreadyExists = jamSessionSongRepository.findByJamSessionOrderByPositionAsc(session).stream()
 				.anyMatch(jss -> jss.getSong().getId().equals(song.getId()));
 		if (alreadyExists) {
+			log.warn("Song {} already exists in setlist for session {}", song.getId(), sessionId);
 			throw new BadRequestException("This song is already in the setlist.");
 		}
 
@@ -232,13 +265,16 @@ public class JamSessionServiceImpl implements JamSessionService {
 
 		JamSessionSong jss = JamSessionSong.builder().jamSession(session).song(song).position(position).build();
 		jss = jamSessionSongRepository.save(jss);
+		log.info("Song {} added to setlist for session {} at position {}", song.getId(), sessionId, position);
 
 		broadcastSetlistUpdate(session);
 		return toSetlistEntryResponse(jss);
 	}
 
+	@Override
 	@Transactional
 	public void removeSongFromSetlist(Long sessionId, Long requesterId, Long jamSessionSongId) {
+		log.info("User {} removing setlist entry {} from session {}", requesterId, jamSessionSongId, sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		assertLeaderOrCoLeader(session, requesterId);
 
@@ -250,6 +286,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 		if (session.getCurrentSongId() != null && session.getCurrentSongId().equals(jamSessionSongId)) {
 			session.setCurrentSongId(null);
 			jamSessionRepository.save(session);
+			log.debug("Cleared currentSongId for session {} since it was removed from setlist", sessionId);
 		}
 
 		broadcastSetlistUpdate(session);
@@ -265,8 +302,11 @@ public class JamSessionServiceImpl implements JamSessionService {
 	 * explicit override passed in this request). The actual chord math is delegated
 	 * to TransposeService so ChordTransposer is never touched here.
 	 */
+	@Override
 	@Transactional
 	public JamSessionEvent changeCurrentSong(Long sessionId, Long requesterId, ChangeCurrentSongRequest request) {
+		log.info("User {} changing current song to setlistEntry={} for session {}", requesterId,
+				request.getJamSessionSongId(), sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		assertLeaderOrCoLeader(session, requesterId);
 
@@ -285,6 +325,8 @@ public class JamSessionServiceImpl implements JamSessionService {
 		session.setCurrentSongId(jss.getId());
 		session.setCurrentTransposeOffset(jss.getTransposeOffset());
 		jamSessionRepository.save(session);
+		log.debug("Session {} current song set to setlistEntry={}, transposeOffset={}", sessionId, jss.getId(),
+				jss.getTransposeOffset());
 
 		JamSessionEvent event = buildSongChangedEvent(jss);
 		eventPublisher.publish(sessionId, event);
@@ -296,8 +338,11 @@ public class JamSessionServiceImpl implements JamSessionService {
 	 * ABSOLUTE offset. Kept for backward compatibility with the existing
 	 * TransposeRequest endpoint — delegates entirely to TransposeService now.
 	 */
+	@Override
 	@Transactional
 	public JamSessionEvent transposeCurrentSong(Long sessionId, Long requesterId, TransposeRequest request) {
+		log.info("User {} setting absolute transpose offset={} for session {}", requesterId,
+				request.getTransposeOffset(), sessionId);
 		return transposeService.transposeTo(sessionId, requesterId, request.getTransposeOffset());
 	}
 
@@ -306,13 +351,16 @@ public class JamSessionServiceImpl implements JamSessionService {
 	 * sends a relative step (+1 / -1); the backend is the sole owner of the running
 	 * offset, so there's no client-side "stale state" possible.
 	 */
+	@Override
 	@Transactional
 	public JamSessionEvent transposeCurrentSongBy(Long sessionId, Long requesterId, int deltaSteps) {
+		log.info("User {} transposing session {} by {} steps", requesterId, sessionId, deltaSteps);
 		return transposeService.transposeBy(sessionId, requesterId, deltaSteps);
 	}
-
+	@Override
 	@Transactional(readOnly = true)
 	public List<JamParticipantResponse> getActiveParticipants(Long sessionId) {
+		log.debug("Fetching active participants for session {}", sessionId);
 		JamSession session = getSessionOrThrow(sessionId);
 		return participantRepository.findByJamSessionAndIsActiveTrue(session).stream().map(this::toParticipantResponse)
 				.toList();
@@ -334,6 +382,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 				userService.getUserOrThrow(userId));
 		boolean isCoLeader = participant.map(p -> p.getRole() == ParticipantRole.CO_LEADER).orElse(false);
 		if (!isCoLeader) {
+			log.warn("User {} attempted unauthorized action on session {}", userId, session.getId());
 			throw new ForbiddenException("Only the session leader or a co-leader can perform this action.");
 		}
 	}
@@ -377,6 +426,7 @@ public class JamSessionServiceImpl implements JamSessionService {
 				return candidate;
 			}
 		}
+		log.error("Failed to generate a unique invite code after 10 attempts");
 		throw new IllegalStateException("Could not generate a unique invite code after multiple attempts.");
 	}
 
