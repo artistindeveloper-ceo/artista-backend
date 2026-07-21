@@ -59,6 +59,7 @@ public class PostController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 
+
 	@GetMapping("/{postId}")
 	public ResponseEntity<PostResponse> getPost(@PathVariable Long postId) {
 		Long viewerId = currentUserIdOrNull();
