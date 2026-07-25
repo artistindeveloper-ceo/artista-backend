@@ -31,4 +31,6 @@ public class RegisterRequest {
     @NotBlank(message = "Display name is required.")
     @Size(min = 1, max = 100, message = "Display name must be between 1 and 100 characters.")
     private String displayName;
+    
+    private String professionalType;
 }

@@ -2,7 +2,6 @@ package com.artist_in.app.serviceimpl;
 
 import java.time.Instant;
 
-import com.artist_in.app.service.AuthService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,15 +11,18 @@ import org.springframework.transaction.annotation.Transactional;
 import com.artist_in.app.dto.auth.AuthResponse;
 import com.artist_in.app.dto.auth.LoginRequest;
 import com.artist_in.app.dto.auth.RegisterRequest;
+import com.artist_in.app.entity.Profile;
 import com.artist_in.app.entity.RefreshToken;
 import com.artist_in.app.entity.User;
 import com.artist_in.app.enums.Role;
 import com.artist_in.app.exception.ConflictException;
 import com.artist_in.app.exception.UnauthorizedException;
+import com.artist_in.app.repository.ProfileRepository;
 import com.artist_in.app.repository.RefreshTokenRepository;
 import com.artist_in.app.repository.UserRepository;
 import com.artist_in.app.security.JwtTokenProvider;
 import com.artist_in.app.security.UserPrincipal;
+import com.artist_in.app.service.AuthService;
 import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class AuthServiceImpl implements AuthService {
 
 	private final UserRepository userRepository;
 	private final RefreshTokenRepository refreshTokenRepository;
+	private final ProfileRepository profileRepository; // ← ADD
 	private final PasswordEncoder passwordEncoder;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final AuthenticationManager authenticationManager;
@@ -53,10 +56,23 @@ public class AuthServiceImpl implements AuthService {
 
 		User user = User.builder().username(request.getUsername()).email(request.getEmail())
 				.passwordHash(passwordEncoder.encode(request.getPassword())).displayName(request.getDisplayName())
-				.role(Role.USER).isActive(true).build();
+				.roleType(request.getProfessionalType()).role(Role.USER).isActive(true).build();
 
 		user = userRepository.save(user);
 		log.info("User registered successfully: userId={}, username={}", user.getId(), user.getUsername());
+
+		// Default empty profile turant create karo — city baad me Edit Profile
+		// screen se set hogi (column ab nullable hai). @MapsId ki wajah se
+		// profile.id automatically user.id se match ho jayega.
+		Profile profile = new Profile();
+		profile.setUser(user);
+		profile.setProfessionalType(request.getProfessionalType());
+		profile.setCity(null);
+		profile.setAvailable(true);
+		profile.setAvgRating(0.0);
+		profile.setRatingCount(0);
+		profileRepository.save(profile);
+		log.info("Default profile created: userId={}", user.getId());
 
 		UserPrincipal principal = new UserPrincipal(user);
 		return buildAuthResponse(principal, user);
@@ -88,11 +104,10 @@ public class AuthServiceImpl implements AuthService {
 	public AuthResponse refresh(String refreshTokenValue) {
 		log.debug("Refresh token request received");
 
-		RefreshToken storedToken = refreshTokenRepository.findByToken(refreshTokenValue)
-				.orElseThrow(() -> {
-					log.warn("Refresh failed - token not found");
-					return new UnauthorizedException("Invalid refresh token.");
-				});
+		RefreshToken storedToken = refreshTokenRepository.findByToken(refreshTokenValue).orElseThrow(() -> {
+			log.warn("Refresh failed - token not found");
+			return new UnauthorizedException("Invalid refresh token.");
+		});
 
 		if (storedToken.isRevoked() || storedToken.isExpired()) {
 			log.warn("Refresh failed - token revoked or expired: userId={}", storedToken.getUser().getId());
@@ -101,7 +116,6 @@ public class AuthServiceImpl implements AuthService {
 
 		User user = storedToken.getUser();
 
-		// Rotate: revoke the old refresh token and issue a brand new pair.
 		storedToken.setRevoked(true);
 		refreshTokenRepository.save(storedToken);
 
