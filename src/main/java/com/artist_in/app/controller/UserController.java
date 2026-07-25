@@ -11,17 +11,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.user.ChangePasswordRequest;
+import com.artist_in.app.dto.user.ConfirmMediaRequest;
 import com.artist_in.app.dto.user.UpdateProfileRequest;
 import com.artist_in.app.dto.user.UserProfileResponse;
 import com.artist_in.app.dto.user.UserSummaryResponse;
 import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.security.UserPrincipal;
-import com.artist_in.app.service.FileStorageService;
+import com.artist_in.app.service.MediaService;
 import com.artist_in.app.service.UserService;
 
 import jakarta.validation.Valid;
@@ -35,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 public class UserController {
 
 	private final UserService userService;
-	private final FileStorageService fileStorageService;
+	private final MediaService mediaService;
 
 	@GetMapping("/me")
 	public ResponseEntity<UserProfileResponse> getMyProfile() {
@@ -65,8 +65,7 @@ public class UserController {
 	}
 
 	@PutMapping("/me")
-	public ResponseEntity<UserProfileResponse> updateProfile(
-			@Valid @RequestBody UpdateProfileRequest request) {
+	public ResponseEntity<UserProfileResponse> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
 
 		Long userId = SecurityUtils.getCurrentUserId();
 
@@ -80,8 +79,7 @@ public class UserController {
 	}
 
 	@PostMapping("/me/password")
-	public ResponseEntity<MessageResponse> changePassword(
-			@Valid @RequestBody ChangePasswordRequest request) {
+	public ResponseEntity<MessageResponse> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
 
 		Long userId = SecurityUtils.getCurrentUserId();
 
@@ -94,60 +92,32 @@ public class UserController {
 		return ResponseEntity.ok(MessageResponse.of("Password changed successfully."));
 	}
 
-	@PostMapping(value = "/me/profile-photo", consumes = "multipart/form-data")
-	public ResponseEntity<MessageResponse> uploadProfilePhoto(
-			@RequestParam("file") MultipartFile file) {
-
+	@PostMapping("/me/profile-photo")
+	public ResponseEntity<MessageResponse> uploadProfilePhoto(@RequestBody ConfirmMediaRequest request) {
 		Long userId = SecurityUtils.getCurrentUserId();
-
-		log.info("Received profile photo upload request. userId={}, fileName={}",
-				userId, file.getOriginalFilename());
-
-		String url = fileStorageService.storeImage(
-				file,
-				FileStorageService.UploadCategory.PROFILE_PHOTOS);
-
+		String url = mediaService.cdnUrl(request.mediaKey());
+		log.info("Confirming profile photo for userId={}, key={}", userId, request.mediaKey());
 		userService.updateProfilePhoto(userId, url);
-
-		log.info("Profile photo uploaded successfully. userId={}, url={}", userId, url);
-
 		return ResponseEntity.ok(MessageResponse.of(url));
 	}
 
-	@PostMapping(value = "/me/cover-photo", consumes = "multipart/form-data")
-	public ResponseEntity<MessageResponse> uploadCoverPhoto(
-			@RequestParam("file") MultipartFile file) {
-
+	@PostMapping("/me/cover-photo")
+	public ResponseEntity<MessageResponse> uploadCoverPhoto(@RequestBody ConfirmMediaRequest request) {
 		Long userId = SecurityUtils.getCurrentUserId();
-
-		log.info("Received cover photo upload request. userId={}, fileName={}",
-				userId, file.getOriginalFilename());
-
-		String url = fileStorageService.storeImage(
-				file,
-				FileStorageService.UploadCategory.COVER_PHOTOS);
-
+		String url = mediaService.cdnUrl(request.mediaKey());
+		log.info("Confirming cover photo for userId={}, key={}", userId, request.mediaKey());
 		userService.updateCoverPhoto(userId, url);
-
-		log.info("Cover photo uploaded successfully. userId={}, url={}", userId, url);
-
 		return ResponseEntity.ok(MessageResponse.of(url));
 	}
 
 	@GetMapping("/search")
-	public ResponseEntity<PageResponse<UserSummaryResponse>> search(
-			@RequestParam String query,
-			@AuthenticationPrincipal UserPrincipal currentUser,
-			Pageable pageable) {
+	public ResponseEntity<PageResponse<UserSummaryResponse>> search(@RequestParam String query,
+			@AuthenticationPrincipal UserPrincipal currentUser, Pageable pageable) {
 
-		log.info("Received user search request. query='{}', userId={}, page={}, size={}",
-				query,
-				currentUser.getId(),
-				pageable.getPageNumber(),
-				pageable.getPageSize());
+		log.info("Received user search request. query='{}', userId={}, page={}, size={}", query, currentUser.getId(),
+				pageable.getPageNumber(), pageable.getPageSize());
 
-		PageResponse<UserSummaryResponse> response =
-				userService.searchUsers(query, currentUser.getId(), pageable);
+		PageResponse<UserSummaryResponse> response = userService.searchUsers(query, currentUser.getId(), pageable);
 
 		log.info("User search completed successfully. query='{}'", query);
 

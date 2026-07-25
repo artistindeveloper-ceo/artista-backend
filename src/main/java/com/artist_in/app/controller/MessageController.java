@@ -1,6 +1,5 @@
 package com.artist_in.app.controller;
 
-import com.artist_in.app.service.FileStorageService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -10,9 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
@@ -22,12 +19,10 @@ import com.artist_in.app.dto.message.SendMessageRequest;
 import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.security.UserPrincipal;
 import com.artist_in.app.service.MessageService;
-import lombok.extern.slf4j.Slf4j;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
-
-
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
@@ -36,7 +31,6 @@ import lombok.RequiredArgsConstructor;
 public class MessageController {
 
 	private final MessageService messageService;
-	private final FileStorageService fileStorageService;
 
 	@GetMapping("/conversations")
 	public ResponseEntity<PageResponse<ConversationResponse>> getConversations(Pageable pageable) {
@@ -47,7 +41,7 @@ public class MessageController {
 
 	@GetMapping("/conversations/{conversationId}")
 	public ResponseEntity<PageResponse<ChatMessageResponse>> getMessages(@PathVariable Long conversationId,
-																		 Pageable pageable) {
+			Pageable pageable) {
 		Long userId = SecurityUtils.getCurrentUserId();
 		log.debug("Fetching messages for conversationId={}, userId={}, page={}", conversationId, userId, pageable);
 		return ResponseEntity.ok(messageService.getMessages(conversationId, userId, pageable));
@@ -67,21 +61,12 @@ public class MessageController {
 	 */
 	@PostMapping("/users/{recipientId}")
 	public ResponseEntity<ChatMessageResponse> sendMessage(@PathVariable Long recipientId,
-														   @Valid @RequestBody SendMessageRequest request) {
+			@Valid @RequestBody SendMessageRequest request) {
 		Long senderId = SecurityUtils.getCurrentUserId();
 		log.info("Sending message from senderId={} to recipientId={}", senderId, recipientId);
 		ChatMessageResponse response = messageService.sendMessage(senderId, recipientId, request);
 		log.debug("Message sent, id={} in conversationId={}", response.getId(), response.getConversationId());
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
-	}
-
-	@PostMapping(value = "/attachments", consumes = "multipart/form-data")
-	public ResponseEntity<MessageResponse> uploadAttachment(@RequestParam("file") MultipartFile file) {
-		log.info("Uploading chat attachment: name={}, size={} bytes", file.getOriginalFilename(), file.getSize());
-		FileStorageService.StoredMedia stored = fileStorageService.storeMedia(file,
-				FileStorageService.UploadCategory.CHAT_ATTACHMENTS);
-		log.info("Chat attachment stored: {}", stored.url());
-		return ResponseEntity.ok(MessageResponse.of(stored.url()));
 	}
 
 	@GetMapping("/unread-count")
