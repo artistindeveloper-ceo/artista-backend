@@ -24,37 +24,37 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService;
+	private final AuthService authService;
 
-    @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        log.info("Register request received");
-        AuthResponse response = authService.register(request);
-        log.info("User registered successfully, userId={}", response.getUser().getId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+	@PostMapping("/register")
+	public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+		log.info("Register request received");
+		AuthResponse response = authService.register(request);
+		log.info("User registered successfully, userId={}", response.getUser().getId());
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
+	}
 
-    @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.info("Login attempt received",request.getUsernameOrEmail(),request.getPassword());
-        AuthResponse response = authService.login(request);
-        log.info("Login successful, userId={}", response.getUser().getId());
-        return ResponseEntity.ok(response);
-    }
+	@PostMapping("/login")
+	public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+		log.info("Login attempt received", request.getUsernameOrEmail(), request.getPassword());
+		AuthResponse response = authService.login(request);
+		log.info("Login successful, userId={}", response.getUser().getId());
+		return ResponseEntity.ok(response);
+	}
 
-    @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        log.debug("Token refresh requested");
-        AuthResponse response = authService.refresh(request.getRefreshToken());
-        log.debug("Token refreshed successfully");
-        return ResponseEntity.ok(response);
-    }
+	@PostMapping("/refresh")
+	public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+		log.debug("Token refresh requested");
+		AuthResponse response = authService.refresh(request.getRefreshToken());
+		log.debug("Token refreshed successfully");
+		return ResponseEntity.ok(response);
+	}
 
-    @PostMapping("/logout")
-    public ResponseEntity<MessageResponse> logout(@Valid @RequestBody RefreshTokenRequest request) {
-        log.info("Logout requested");
-        authService.logout(request.getRefreshToken());
-        log.info("Logout successful");
-        return ResponseEntity.ok(MessageResponse.of("Logged out successfully."));
-    }
+	@PostMapping("/logout")
+	public ResponseEntity<MessageResponse> logout(@Valid @RequestBody RefreshTokenRequest request) {
+		log.info("Logout requested");
+		authService.logout(request.getRefreshToken());
+		log.info("Logout successful");
+		return ResponseEntity.ok(MessageResponse.of("Logged out successfully."));
+	}
 }

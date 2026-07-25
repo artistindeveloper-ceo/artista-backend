@@ -27,6 +27,7 @@ public class UserProfileResponse {
 	private InstrumentType primaryInstrument;
 	private Set<InstrumentType> instruments;
 	private String genres;
+	private String roleType;
 	private boolean isPrivate;
 	private long followerCount;
 	private long followingCount;

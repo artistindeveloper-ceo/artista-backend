@@ -40,8 +40,7 @@ public class UserServiceImpl implements UserService {
 	public User getUserOrThrow(Long userId) {
 		log.debug("Fetching user with ID: {}", userId);
 
-		return userRepository.findById(userId)
-				.orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+		return userRepository.findById(userId).orElseThrow(() -> ResourceNotFoundException.of("User", userId));
 	}
 
 	@Override
@@ -83,13 +82,11 @@ public class UserServiceImpl implements UserService {
 
 	private UserProfileResponse buildProfileResponse(User target, Long viewerId) {
 
-		log.debug("Building profile response for targetUserId: {}, viewerId: {}",
-				target.getId(), viewerId);
+		log.debug("Building profile response for targetUserId: {}, viewerId: {}", target.getId(), viewerId);
 
 		long followerCount = followRepository.countByFollowing(target);
 		long followingCount = followRepository.countByFollower(target);
-		long postCount = postRepository
-				.findByAuthorAndIsArchivedFalseOrderByCreatedAtDesc(target, Pageable.unpaged())
+		long postCount = postRepository.findByAuthorAndIsArchivedFalseOrderByCreatedAtDesc(target, Pageable.unpaged())
 				.getTotalElements();
 
 		Boolean isFollowedByViewer = null;
@@ -104,37 +101,20 @@ public class UserServiceImpl implements UserService {
 			isFollowedByViewer = followRepository.existsByFollowerAndFollowing(viewer, target);
 
 			hasPendingRequest = followRequestRepository
-					.findByRequesterAndTargetAndStatus(
-							viewer,
-							target,
-							FollowRequestStatus.PENDING)
-					.isPresent();
+					.findByRequesterAndTargetAndStatus(viewer, target, FollowRequestStatus.PENDING).isPresent();
 		}
 
-		log.debug("Profile stats for userId={} -> followers={}, following={}, posts={}",
-				target.getId(), followerCount, followingCount, postCount);
+		log.debug("Profile stats for userId={} -> followers={}, following={}, posts={}", target.getId(), followerCount,
+				followingCount, postCount);
 
-		return UserProfileResponse.builder()
-				.id(target.getId())
-				.username(target.getUsername())
-				.email(viewingOwnProfile ? target.getEmail() : null)
-				.displayName(target.getDisplayName())
-				.bio(target.getBio())
-				.profilePhotoUrl(target.getProfilePhotoUrl())
-				.coverPhotoUrl(target.getCoverPhotoUrl())
-				.location(target.getLocation())
-				.websiteUrl(target.getWebsiteUrl())
-				.primaryInstrument(target.getPrimaryInstrument())
-				.instruments(target.getInstruments())
-				.genres(target.getGenres())
-				.isPrivate(target.isPrivate())
-				.followerCount(followerCount)
-				.followingCount(followingCount)
-				.postCount(postCount)
-				.isFollowedByViewer(isFollowedByViewer)
-				.hasPendingFollowRequestFromViewer(hasPendingRequest)
-				.createdAt(target.getCreatedAt())
-				.build();
+		return UserProfileResponse.builder().id(target.getId()).username(target.getUsername())
+				.email(viewingOwnProfile ? target.getEmail() : null).displayName(target.getDisplayName())
+				.bio(target.getBio()).profilePhotoUrl(target.getProfilePhotoUrl())
+				.coverPhotoUrl(target.getCoverPhotoUrl()).primaryInstrument(target.getPrimaryInstrument())
+				.instruments(target.getInstruments()).roleType(target.getRoleType()).isPrivate(target.isPrivate())
+				.followerCount(followerCount).followingCount(followingCount).postCount(postCount)
+				.isFollowedByViewer(isFollowedByViewer).hasPendingFollowRequestFromViewer(hasPendingRequest)
+				.createdAt(target.getCreatedAt()).build();
 	}
 
 	@Transactional
@@ -152,24 +132,12 @@ public class UserServiceImpl implements UserService {
 			user.setBio(request.getBio());
 		}
 
-		if (request.getLocation() != null) {
-			user.setLocation(request.getLocation());
-		}
-
-		if (request.getWebsiteUrl() != null) {
-			user.setWebsiteUrl(request.getWebsiteUrl());
-		}
-
 		if (request.getPrimaryInstrument() != null) {
 			user.setPrimaryInstrument(request.getPrimaryInstrument());
 		}
 
 		if (request.getInstruments() != null) {
 			user.setInstruments(request.getInstruments());
-		}
-
-		if (request.getGenres() != null) {
-			user.setGenres(request.getGenres());
 		}
 
 		if (request.getIsPrivate() != null) {
@@ -236,52 +204,30 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	@Transactional(readOnly = true)
-	public PageResponse<UserSummaryResponse> searchUsers(
-			String query,
-			Long currentUserId,
-			Pageable pageable) {
+	public PageResponse<UserSummaryResponse> searchUsers(String query, Long currentUserId, Pageable pageable) {
 
-		log.info("Searching users with query='{}', currentUserId={}, page={}, size={}",
-				query,
-				currentUserId,
-				pageable.getPageNumber(),
-				pageable.getPageSize());
+		log.info("Searching users with query='{}', currentUserId={}, page={}, size={}", query, currentUserId,
+				pageable.getPageNumber(), pageable.getPageSize());
 
-		Page<User> users =
-				userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(
-						query,
-						query,
-						pageable);
+		Page<User> users = userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(query,
+				query, pageable);
 
 		User currentUser = getUserOrThrow(currentUserId);
 
 		Page<UserSummaryResponse> mapped = users.map(user -> {
 
-			boolean isFollowing =
-					followRepository.existsByFollowerIdAndFollowingId(currentUserId, user.getId());
+			boolean isFollowing = followRepository.existsByFollowerIdAndFollowingId(currentUserId, user.getId());
 
-			boolean hasPending =
-					followRequestRepository
-							.findByRequesterAndTargetAndStatus(
-									currentUser,
-									user,
-									FollowRequestStatus.PENDING)
-							.isPresent();
+			boolean hasPending = followRequestRepository
+					.findByRequesterAndTargetAndStatus(currentUser, user, FollowRequestStatus.PENDING).isPresent();
 
-			return UserSummaryResponse.builder()
-					.id(user.getId())
-					.username(user.getUsername())
-					.displayName(user.getDisplayName())
-					.profilePhotoUrl(user.getProfilePhotoUrl())
-					.primaryInstrument(user.getPrimaryInstrument())
-					.isFollowing(isFollowing)
-					.hasPendingFollowRequest(hasPending)
-					.build();
+			return UserSummaryResponse.builder().id(user.getId()).username(user.getUsername())
+					.displayName(user.getDisplayName()).profilePhotoUrl(user.getProfilePhotoUrl())
+					.primaryInstrument(user.getPrimaryInstrument()).isFollowing(isFollowing)
+					.hasPendingFollowRequest(hasPending).build();
 		});
 
-		log.info("User search completed. Query='{}', Total Results={}",
-				query,
-				mapped.getTotalElements());
+		log.info("User search completed. Query='{}', Total Results={}", query, mapped.getTotalElements());
 
 		return PageResponse.from(mapped, u -> u);
 	}
