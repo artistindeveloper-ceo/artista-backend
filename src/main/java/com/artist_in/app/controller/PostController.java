@@ -1,7 +1,5 @@
 package com.artist_in.app.controller;
 
-import com.artist_in.app.service.FileStorageService;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -9,20 +7,19 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.post.CreatePostRequest;
 import com.artist_in.app.dto.post.PostResponse;
-import com.artist_in.app.enums.MediaType;
 import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.service.PostService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
@@ -31,34 +28,14 @@ import lombok.RequiredArgsConstructor;
 public class PostController {
 
 	private final PostService postService;
-	private final FileStorageService fileStorageService;
 
-	@PostMapping(consumes = "multipart/form-data")
-	public ResponseEntity<PostResponse> createPost(@RequestParam(value = "caption", required = false) String caption,
-												   @RequestParam(value = "media", required = false) MultipartFile media) {
+	@PostMapping
+	public ResponseEntity<PostResponse> createPost(@RequestBody CreatePostRequest request) {
 		Long userId = SecurityUtils.getCurrentUserId();
-		log.info("Creating post for userId={}, hasMedia={}", userId, media != null && !media.isEmpty());
-		CreatePostRequest request = new CreatePostRequest();
-		request.setCaption(caption);
-
-		String mediaUrl = null;
-		String thumbnailUrl = null;
-		MediaType mediaType = MediaType.NONE;
-
-		if (media != null && !media.isEmpty()) {
-			FileStorageService.StoredMedia stored = fileStorageService.storeMedia(media,
-					FileStorageService.UploadCategory.POST_MEDIA);
-			mediaUrl = stored.url();
-			thumbnailUrl = stored.thumbnailUrl(); // ← NEW
-			mediaType = stored.mediaType();
-			log.debug("Post media stored: url={}, thumbnailUrl={}, type={}", mediaUrl, thumbnailUrl, mediaType);
-		}
-
-		PostResponse response = postService.createPost(userId, request, mediaUrl, thumbnailUrl, mediaType);
-		log.info("Post created: id={}, userId={}", response.getId(), userId);
+		log.info("Creating post for userId={}, mediaType={}", userId, request.getMediaType());
+		PostResponse response = postService.createPost(userId, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
-
 
 	@GetMapping("/{postId}")
 	public ResponseEntity<PostResponse> getPost(@PathVariable Long postId) {

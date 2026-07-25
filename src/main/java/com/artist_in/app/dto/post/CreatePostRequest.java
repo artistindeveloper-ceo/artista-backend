@@ -1,5 +1,7 @@
 package com.artist_in.app.dto.post;
 
+import com.artist_in.app.enums.MediaType;
+
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,6 +14,9 @@ import lombok.Setter;
 @AllArgsConstructor
 public class CreatePostRequest {
 
-    @Size(max = 2200, message = "Caption must be at most 2200 characters.")
-    private String caption;
+	@Size(max = 2200, message = "Caption must be at most 2200 characters.")
+	private String caption;
+
+	private String mediaKey; // S3 key returned from /presign
+	private MediaType mediaType;
 }
