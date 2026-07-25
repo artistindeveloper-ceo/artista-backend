@@ -3,8 +3,6 @@ package com.artist_in.app.serviceimpl;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +12,7 @@ import com.artist_in.app.instument.repository.CategoryRepository;
 import com.artist_in.app.service.CategoryService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
@@ -23,7 +22,7 @@ public class CategoryServiceImpl implements CategoryService {
 	private final CategoryRepository categoryRepository;
 
 	@Override
-	@Cacheable
+
 	@Transactional(readOnly = true)
 	public List<CategoryResponseDTO> getAllActiveCategories() {
 
@@ -33,13 +32,7 @@ public class CategoryServiceImpl implements CategoryService {
 
 		log.info("Found {} active categories.", categories.size());
 
-		return categories.stream()
-				.map(c -> CategoryResponseDTO.builder()
-						.id(c.getId())
-						.name(c.getName())
-						.description(c.getDescription())
-						.icon(c.getIcon())
-						.build())
-				.collect(Collectors.toList());
+		return categories.stream().map(c -> CategoryResponseDTO.builder().id(c.getId()).name(c.getName())
+				.description(c.getDescription()).icon(c.getIcon()).build()).collect(Collectors.toList());
 	}
 }

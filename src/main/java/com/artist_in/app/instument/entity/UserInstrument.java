@@ -8,6 +8,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import com.artist_in.app.entity.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import jakarta.persistence.Column;
@@ -40,6 +41,7 @@ public class UserInstrument {
 	private Integer id;
 
 	@ManyToOne(fetch = FetchType.LAZY)
+	@JsonIgnore 
 	@JoinColumn(name = "user_id", nullable = false)
 	private User user;
 

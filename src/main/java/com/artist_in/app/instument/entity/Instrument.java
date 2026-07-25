@@ -11,6 +11,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import jakarta.persistence.CascadeType;
@@ -92,9 +93,11 @@ public class Instrument {
 	@OneToMany(mappedBy = "instrument", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
 	private List<InstrumentMedia> media = new ArrayList<>();
 
+	@JsonIgnore
 	@OneToMany(mappedBy = "instrument", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
 	private List<InstrumentReview> reviews = new ArrayList<>();
 
+	@JsonIgnore
 	@OneToMany(mappedBy = "instrument", fetch = FetchType.LAZY)
 	private List<UserInstrument> userInstruments = new ArrayList<>();
 }

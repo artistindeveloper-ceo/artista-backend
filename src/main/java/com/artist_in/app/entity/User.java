@@ -3,10 +3,13 @@ package com.artist_in.app.entity;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import com.artist_in.app.enums.InstrumentType;
 import com.artist_in.app.enums.Role;
@@ -37,9 +40,11 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "users", uniqueConstraints = { @UniqueConstraint(name = "uk_users_username", columnNames = "username"),
-		@UniqueConstraint(name = "uk_users_email", columnNames = "email") }, indexes = {
+		@UniqueConstraint(name = "uk_users_email", columnNames = "email"),
+		@UniqueConstraint(name = "uk_users_mobile_number", columnNames = "mobile_number") }, indexes = {
 				@Index(name = "idx_users_username", columnList = "username"),
-				@Index(name = "idx_users_email", columnList = "email") })
+				@Index(name = "idx_users_email", columnList = "email"),
+				@Index(name = "idx_users_mobile_number", columnList = "mobile_number") })
 @Getter
 @Setter
 @Builder
@@ -72,11 +77,13 @@ public class User extends BaseEntity {
 	@Column(name = "cover_photo_url")
 	private String coverPhotoUrl;
 
-	@Column(name = "location", length = 150)
-	private String location;
 
-	@Column(name = "website_url")
-	private String websiteUrl;
+	@Column(name = "mobile_number", unique = true, length = 15)
+	private String mobileNumber;
+
+	@Column(name = "is_mobile_verified", nullable = false)
+	@Builder.Default
+	private boolean isMobileVerified = false;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "primary_instrument", length = 30)
@@ -90,8 +97,6 @@ public class User extends BaseEntity {
 	@Builder.Default
 	private Set<InstrumentType> instruments = new HashSet<>();
 
-	@Column(name = "genres", length = 300)
-	private String genres;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
@@ -122,4 +127,12 @@ public class User extends BaseEntity {
 
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
 	private List<InstrumentReview> reviews = new ArrayList<>();
+
+	private String roleType; // MUSICIAN, PHOTOGRAPHER, etc.
+	private boolean verified = false;
+
+	// PostgreSQL JSONB Column for flexible attributes
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(columnDefinition = "jsonb")
+	private Map<String, Object> metadata;
 }

@@ -3,6 +3,7 @@ package com.artist_in.app.instument.entity;
 import java.time.LocalDateTime;
 
 import com.artist_in.app.entity.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,6 +37,7 @@ public class InstrumentReview {
 	private Instrument instrument;
 
 	@ManyToOne(fetch = FetchType.LAZY)
+	@JsonIgnore
 	@JoinColumn(name = "user_id", nullable = false)
 	private User user;
 
