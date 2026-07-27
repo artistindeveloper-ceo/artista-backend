@@ -11,9 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.artist_in.app.dto.auth.AuthResponse;
 import com.artist_in.app.dto.auth.LoginRequest;
 import com.artist_in.app.dto.auth.RegisterRequest;
+import com.artist_in.app.dto.business.BusinessCreateRequest;
 import com.artist_in.app.entity.Profile;
 import com.artist_in.app.entity.RefreshToken;
 import com.artist_in.app.entity.User;
+import com.artist_in.app.enums.AccountType;
+import com.artist_in.app.enums.BusinessType;
 import com.artist_in.app.enums.Role;
 import com.artist_in.app.exception.ConflictException;
 import com.artist_in.app.exception.UnauthorizedException;
@@ -23,6 +26,7 @@ import com.artist_in.app.repository.UserRepository;
 import com.artist_in.app.security.JwtTokenProvider;
 import com.artist_in.app.security.UserPrincipal;
 import com.artist_in.app.service.AuthService;
+import com.artist_in.app.service.BusinessService;
 import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -39,11 +43,52 @@ public class AuthServiceImpl implements AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final AuthenticationManager authenticationManager;
+	private final BusinessService businessService;
+
+//	@Override
+//	@Transactional
+//	public AuthResponse register(RegisterRequest request) {
+//		log.info("Register attempt: username={}", request.getUsername());
+//
+//		if (userRepository.existsByUsernameIgnoreCase(request.getUsername())) {
+//			log.warn("Registration failed - username already taken: username={}", request.getUsername());
+//			throw new ConflictException("Username '" + request.getUsername() + "' is already taken.");
+//		}
+//		if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+//			log.warn("Registration failed - email already in use: username={}", request.getUsername());
+//			throw new ConflictException("An account with this email already exists.");
+//		}
+//
+//		User user = User.builder().username(request.getUsername()).email(request.getEmail())
+//				.passwordHash(passwordEncoder.encode(request.getPassword())).displayName(request.getDisplayName())
+//				.roleType(request.getProfessionalType()).role(Role.USER).isActive(true).build();
+//
+//		user = userRepository.save(user);
+//		log.info("User registered successfully: userId={}, username={}", user.getId(), user.getUsername());
+//
+//		// Default empty profile turant create karo — city baad me Edit Profile
+//		// screen se set hogi (column ab nullable hai). @MapsId ki wajah se
+//		// profile.id automatically user.id se match ho jayega.
+//		Profile profile = new Profile();
+//		profile.setUser(user);
+//		profile.setProfessionalType(request.getProfessionalType());
+//		profile.setCity(null);
+//		profile.setAvailable(true);
+//		profile.setAvgRating(0.0);
+//		profile.setRatingCount(0);
+//		profileRepository.save(profile);
+//		log.info("Default profile created: userId={}", user.getId());
+//
+//		UserPrincipal principal = new UserPrincipal(user);
+//		return buildAuthResponse(principal, user);
+//	}
 
 	@Override
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
 		log.info("Register attempt: username={}", request.getUsername());
+
+		validateAccountTypeFields(request);
 
 		if (userRepository.existsByUsernameIgnoreCase(request.getUsername())) {
 			log.warn("Registration failed - username already taken: username={}", request.getUsername());
@@ -54,16 +99,58 @@ public class AuthServiceImpl implements AuthService {
 			throw new ConflictException("An account with this email already exists.");
 		}
 
+		// roleType stays a quick-glance label on User itself — professionalType for
+		// individuals, businessType for businesses. The real source of truth is
+		// still Profile / Business, this is just for cheap display without a join.
+		String roleTypeValue = request.getAccountType() == AccountType.INDIVIDUAL ? request.getProfessionalType()
+				: request.getBusinessType();
+
 		User user = User.builder().username(request.getUsername()).email(request.getEmail())
 				.passwordHash(passwordEncoder.encode(request.getPassword())).displayName(request.getDisplayName())
-				.roleType(request.getProfessionalType()).role(Role.USER).isActive(true).build();
+				.roleType(roleTypeValue).role(Role.USER).isActive(true).build();
 
 		user = userRepository.save(user);
 		log.info("User registered successfully: userId={}, username={}", user.getId(), user.getUsername());
 
-		// Default empty profile turant create karo — city baad me Edit Profile
-		// screen se set hogi (column ab nullable hai). @MapsId ki wajah se
-		// profile.id automatically user.id se match ho jayega.
+		switch (request.getAccountType()) {
+		case INDIVIDUAL -> createIndividualProfile(user, request);
+		case BUSINESS -> createBusinessForOwner(user, request);
+		}
+
+		UserPrincipal principal = new UserPrincipal(user);
+		return buildAuthResponse(principal, user);
+	}
+
+	// Never trust the client to only send the "right" branch of fields —
+	// a stray professionalType alongside accountType=BUSINESS (or vice versa)
+	// fails loudly here instead of silently creating the wrong profile type.
+	private void validateAccountTypeFields(RegisterRequest request) {
+		boolean hasProfessionalType = request.getProfessionalType() != null && !request.getProfessionalType().isBlank();
+		boolean hasBusinessFields = (request.getBusinessName() != null && !request.getBusinessName().isBlank())
+				|| (request.getBusinessType() != null && !request.getBusinessType().isBlank())
+				|| request.getCityId() != null;
+
+		if (request.getAccountType() == AccountType.INDIVIDUAL && hasBusinessFields) {
+			throw new IllegalArgumentException(
+					"accountType is INDIVIDUAL but business fields (businessName/businessType/cityId) were sent");
+		}
+		if (request.getAccountType() == AccountType.BUSINESS && hasProfessionalType) {
+			throw new IllegalArgumentException("accountType is BUSINESS but professionalType was sent");
+		}
+		if (request.getAccountType() == AccountType.INDIVIDUAL && !hasProfessionalType) {
+			throw new IllegalArgumentException("professionalType is required for an individual account");
+		}
+		if (request.getAccountType() == AccountType.BUSINESS
+				&& (request.getBusinessName() == null || request.getBusinessName().isBlank()
+						|| request.getBusinessType() == null || request.getBusinessType().isBlank())) {
+			throw new IllegalArgumentException("businessName and businessType are required for a business account");
+		}
+	}
+
+	// Default empty profile turant create karo — city baad me Edit Profile
+	// screen se set hogi (column ab nullable hai). @MapsId ki wajah se
+	// profile.id automatically user.id se match ho jayega.
+	private void createIndividualProfile(User user, RegisterRequest request) {
 		Profile profile = new Profile();
 		profile.setUser(user);
 		profile.setProfessionalType(request.getProfessionalType());
@@ -73,9 +160,17 @@ public class AuthServiceImpl implements AuthService {
 		profile.setRatingCount(0);
 		profileRepository.save(profile);
 		log.info("Default profile created: userId={}", user.getId());
+	}
 
-		UserPrincipal principal = new UserPrincipal(user);
-		return buildAuthResponse(principal, user);
+	// Delegates to BusinessService.create() — same code path as POST
+	// /api/v1/businesses,
+	// so it also creates the BusinessMember(OWNER) row. One place owns this logic.
+	private void createBusinessForOwner(User user, RegisterRequest request) {
+		BusinessCreateRequest businessReq = BusinessCreateRequest.builder()
+				.businessType(BusinessType.valueOf(request.getBusinessType().trim().toUpperCase()))
+				.name(request.getBusinessName()).cityId(request.getCityId()).build();
+		businessService.create(user.getId(), businessReq);
+		log.info("Business created: userId={}, businessType={}", user.getId(), request.getBusinessType());
 	}
 
 	@Override

@@ -2,10 +2,6 @@ package com.artist_in.app.serviceimpl;
 
 import java.time.Instant;
 
-import com.artist_in.app.service.FollowService;
-import com.artist_in.app.service.NotificationService;
-import com.artist_in.app.service.UserService;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,9 +19,12 @@ import com.artist_in.app.exception.BadRequestException;
 import com.artist_in.app.exception.ResourceNotFoundException;
 import com.artist_in.app.repository.FollowRepository;
 import com.artist_in.app.repository.FollowRequestRepository;
+import com.artist_in.app.service.FollowService;
+import com.artist_in.app.service.UserService;
 import com.artist_in.app.util.UserMapper;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
