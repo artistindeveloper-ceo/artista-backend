@@ -14,9 +14,7 @@ import org.hibernate.type.SqlTypes;
 import com.artist_in.app.enums.InstrumentType;
 import com.artist_in.app.enums.Role;
 import com.artist_in.app.instument.entity.InstrumentReview;
-import com.artist_in.app.instument.entity.UserInstrument;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -77,7 +75,6 @@ public class User extends BaseEntity {
 	@Column(name = "cover_photo_url")
 	private String coverPhotoUrl;
 
-
 	@Column(name = "mobile_number", unique = true, length = 15)
 	private String mobileNumber;
 
@@ -96,7 +93,6 @@ public class User extends BaseEntity {
 	@Fetch(FetchMode.SUBSELECT)
 	@Builder.Default
 	private Set<InstrumentType> instruments = new HashSet<>();
-
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
@@ -122,8 +118,8 @@ public class User extends BaseEntity {
 	@Column(name = "last_login_at")
 	private java.time.Instant lastLoginAt;
 
-	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-	private List<UserInstrument> userInstruments = new ArrayList<>();
+	@Column(name = "fcm_token", length = 500)
+	private String fcmToken;
 
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
 	private List<InstrumentReview> reviews = new ArrayList<>();

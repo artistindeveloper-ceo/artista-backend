@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.artist_in.app.entity.Post;
 import com.artist_in.app.entity.User;
+import com.artist_in.app.enums.PostStatus;
 
 import jakarta.transaction.Transactional;
 
@@ -32,4 +33,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Transactional
 	@Query("UPDATE Post p SET p.viewsCount = p.viewsCount + 1 WHERE p.id = :postId")
 	int incrementViewCount(@Param("postId") Long postId);
+
+	@Modifying
+	@Query("UPDATE Post p SET p.mediaUrl = :mediaUrl, p.thumbnailUrl = :thumbnailUrl, p.status = :status WHERE p.id = :postId")
+	void updateMediaAfterProcessing(@Param("postId") Long postId, @Param("mediaUrl") String mediaUrl,
+			@Param("thumbnailUrl") String thumbnailUrl, @Param("status") PostStatus status);
 }

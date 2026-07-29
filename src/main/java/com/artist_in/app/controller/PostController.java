@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.post.CreatePostRequest;
+import com.artist_in.app.dto.post.LikeToggleResult;
 import com.artist_in.app.dto.post.PostResponse;
 import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.service.PostService;
@@ -53,11 +54,12 @@ public class PostController {
 	}
 
 	@PostMapping("/{postId}/like")
-	public ResponseEntity<MessageResponse> toggleLike(@PathVariable Long postId) {
+	public ResponseEntity<LikeToggleResult> toggleLike(@PathVariable Long postId) {
 		Long userId = SecurityUtils.getCurrentUserId();
-		boolean liked = postService.toggleLike(postId, userId);
-		log.debug("Post like toggled: postId={}, userId={}, liked={}", postId, userId, liked);
-		return ResponseEntity.ok(MessageResponse.of(liked ? "LIKED" : "UNLIKED"));
+		LikeToggleResult result = postService.toggleLike(postId, userId);
+		log.debug("Post like toggled: postId={}, userId={}, liked={}, likeCount={}", postId, userId, result.isLiked(),
+				result.getLikeCount());
+		return ResponseEntity.ok(result);
 	}
 
 	@GetMapping("/feed")

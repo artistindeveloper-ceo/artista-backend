@@ -15,10 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.post.CreatePostRequest;
+import com.artist_in.app.dto.post.LikeToggleResult;
 import com.artist_in.app.dto.post.PostResponse;
 import com.artist_in.app.entity.Follow;
 import com.artist_in.app.entity.Post;
 import com.artist_in.app.entity.PostLike;
+import com.artist_in.app.entity.PostView;
 import com.artist_in.app.entity.User;
 import com.artist_in.app.enums.MediaType;
 import com.artist_in.app.enums.NotificationType;
@@ -28,6 +30,7 @@ import com.artist_in.app.exception.ResourceNotFoundException;
 import com.artist_in.app.repository.FollowRepository;
 import com.artist_in.app.repository.PostLikeRepository;
 import com.artist_in.app.repository.PostRepository;
+import com.artist_in.app.repository.PostViewRepository;
 import com.artist_in.app.service.MediaService;
 import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.service.PostService;
@@ -49,6 +52,8 @@ public class PostServiceImpl implements PostService {
 	private final NotificationService notificationService;
 	private final MediaService mediaService;
 	private final VideoProcessingService videoProcessingService;
+
+	private final PostViewRepository postViewRepository;
 
 	@Override
 	@Transactional
@@ -162,8 +167,8 @@ public class PostServiceImpl implements PostService {
 
 	@Override
 	@Transactional
-	@CacheEvict(value = "post", allEntries = true)
-	public boolean toggleLike(Long postId, Long userId) {
+	@Caching(evict = { @CacheEvict(value = "post", allEntries = true), @CacheEvict(value = "feed", allEntries = true) })
+	public LikeToggleResult toggleLike(Long postId, Long userId) {
 		Post post = getPostOrThrow(postId);
 		User user = userService.getUserOrThrow(userId);
 
@@ -173,7 +178,7 @@ public class PostServiceImpl implements PostService {
 			post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
 			postRepository.save(post);
 			log.debug("Post unliked: postId={}, userId={}, newLikeCount={}", postId, userId, post.getLikeCount());
-			return false;
+			return LikeToggleResult.builder().liked(false).likeCount(post.getLikeCount()).build();
 		} else {
 			PostLike like = PostLike.builder().post(post).user(user).createdAt(Instant.now()).build();
 			postLikeRepository.save(like);
@@ -183,7 +188,7 @@ public class PostServiceImpl implements PostService {
 
 			notificationService.notify(post.getAuthor(), user, NotificationType.POST_LIKED, post.getId(),
 					user.getDisplayName() + " liked your post.");
-			return true;
+			return LikeToggleResult.builder().liked(true).likeCount(post.getLikeCount()).build();
 		}
 	}
 
@@ -212,16 +217,34 @@ public class PostServiceImpl implements PostService {
 
 	@Override
 	@Transactional
+	@Caching(evict = { @CacheEvict(value = "post", allEntries = true), @CacheEvict(value = "feed", allEntries = true) })
 	public void incrementViews(Long postId, Long viewerId) {
 		Post post = getPostOrThrow(postId);
 
-		// Apni khud ki post dekhne pe view count nahi badhna chahiye
-		if (viewerId != null && post.getAuthor().getId().equals(viewerId)) {
-			log.debug("Skipping view increment: postId={} viewed by own author, viewerId={}", postId, viewerId);
+		if (viewerId == null) {
+			return;
+		}
+		if (post.getAuthor().getId().equals(viewerId)) {
+			log.debug("Skipping view increment: own post, postId={}", postId);
 			return;
 		}
 
+		User viewer = userService.getUserOrThrow(viewerId);
+		boolean alreadyViewed = postViewRepository.existsByPostAndViewer(post, viewer);
+		if (alreadyViewed) {
+			log.debug("Duplicate view ignored: postId={}, viewerId={}", postId, viewerId);
+			return;
+		}
+
+		postViewRepository.save(PostView.builder().post(post).viewer(viewer).createdAt(Instant.now()).build());
 		postRepository.incrementViewCount(postId);
 	}
 
+	@Override
+	@Transactional
+	@Caching(evict = { @CacheEvict(value = "post", allEntries = true), @CacheEvict(value = "feed", allEntries = true) })
+	public void markVideoReady(Long postId, String mediaUrl, String thumbnailUrl) {
+		postRepository.updateMediaAfterProcessing(postId, mediaUrl, thumbnailUrl, PostStatus.READY);
+		log.info("Video marked ready via targeted update: postId={}", postId);
+	}
 }
