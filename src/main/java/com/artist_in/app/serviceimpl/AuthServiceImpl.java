@@ -16,7 +16,6 @@ import com.artist_in.app.entity.Profile;
 import com.artist_in.app.entity.RefreshToken;
 import com.artist_in.app.entity.User;
 import com.artist_in.app.enums.AccountType;
-import com.artist_in.app.enums.BusinessType;
 import com.artist_in.app.enums.Role;
 import com.artist_in.app.exception.ConflictException;
 import com.artist_in.app.exception.UnauthorizedException;
@@ -39,49 +38,11 @@ public class AuthServiceImpl implements AuthService {
 
 	private final UserRepository userRepository;
 	private final RefreshTokenRepository refreshTokenRepository;
-	private final ProfileRepository profileRepository; // ← ADD
+	private final ProfileRepository profileRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final AuthenticationManager authenticationManager;
 	private final BusinessService businessService;
-
-//	@Override
-//	@Transactional
-//	public AuthResponse register(RegisterRequest request) {
-//		log.info("Register attempt: username={}", request.getUsername());
-//
-//		if (userRepository.existsByUsernameIgnoreCase(request.getUsername())) {
-//			log.warn("Registration failed - username already taken: username={}", request.getUsername());
-//			throw new ConflictException("Username '" + request.getUsername() + "' is already taken.");
-//		}
-//		if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
-//			log.warn("Registration failed - email already in use: username={}", request.getUsername());
-//			throw new ConflictException("An account with this email already exists.");
-//		}
-//
-//		User user = User.builder().username(request.getUsername()).email(request.getEmail())
-//				.passwordHash(passwordEncoder.encode(request.getPassword())).displayName(request.getDisplayName())
-//				.roleType(request.getProfessionalType()).role(Role.USER).isActive(true).build();
-//
-//		user = userRepository.save(user);
-//		log.info("User registered successfully: userId={}, username={}", user.getId(), user.getUsername());
-//
-//		// Default empty profile turant create karo — city baad me Edit Profile
-//		// screen se set hogi (column ab nullable hai). @MapsId ki wajah se
-//		// profile.id automatically user.id se match ho jayega.
-//		Profile profile = new Profile();
-//		profile.setUser(user);
-//		profile.setProfessionalType(request.getProfessionalType());
-//		profile.setCity(null);
-//		profile.setAvailable(true);
-//		profile.setAvgRating(0.0);
-//		profile.setRatingCount(0);
-//		profileRepository.save(profile);
-//		log.info("Default profile created: userId={}", user.getId());
-//
-//		UserPrincipal principal = new UserPrincipal(user);
-//		return buildAuthResponse(principal, user);
-//	}
 
 	@Override
 	@Transactional
@@ -99,9 +60,10 @@ public class AuthServiceImpl implements AuthService {
 			throw new ConflictException("An account with this email already exists.");
 		}
 
-		// roleType stays a quick-glance label on User itself — professionalType for
-		// individuals, businessType for businesses. The real source of truth is
-		// still Profile / Business, this is just for cheap display without a join.
+		// roleType ab single source of truth hai — individual ke liye
+		// professionalType, business ke liye businessType. Profile aur Business
+		// dono isi field ko read karte hain (owner.getRoleType()), koi duplicate
+		// storage nahi.
 		String roleTypeValue = request.getAccountType() == AccountType.INDIVIDUAL ? request.getProfessionalType()
 				: request.getBusinessType();
 
@@ -150,10 +112,11 @@ public class AuthServiceImpl implements AuthService {
 	// Default empty profile turant create karo — city baad me Edit Profile
 	// screen se set hogi (column ab nullable hai). @MapsId ki wajah se
 	// profile.id automatically user.id se match ho jayega.
+	// professionalType yahan set NAHI karna — wo already user.roleType pe
+	// register() me set ho chuka hai, Profile entity ab ye field rakhti hi nahi.
 	private void createIndividualProfile(User user, RegisterRequest request) {
 		Profile profile = new Profile();
 		profile.setUser(user);
-		profile.setProfessionalType(request.getProfessionalType());
 		profile.setCity(null);
 		profile.setAvailable(true);
 		profile.setAvgRating(0.0);
@@ -163,12 +126,11 @@ public class AuthServiceImpl implements AuthService {
 	}
 
 	// Delegates to BusinessService.create() — same code path as POST
-	// /api/v1/businesses,
-	// so it also creates the BusinessMember(OWNER) row. One place owns this logic.
+	// /api/v1/businesses. Business ab single-owner model hai (Business.owner),
+	// koi separate BusinessMember row nahi banti.
 	private void createBusinessForOwner(User user, RegisterRequest request) {
-		BusinessCreateRequest businessReq = BusinessCreateRequest.builder()
-				.businessType(BusinessType.valueOf(request.getBusinessType().trim().toUpperCase()))
-				.name(request.getBusinessName()).cityId(request.getCityId()).build();
+		BusinessCreateRequest businessReq = BusinessCreateRequest.builder().name(request.getBusinessName())
+				.cityId(request.getCityId()).build();
 		businessService.create(user.getId(), businessReq);
 		log.info("Business created: userId={}, businessType={}", user.getId(), request.getBusinessType());
 	}

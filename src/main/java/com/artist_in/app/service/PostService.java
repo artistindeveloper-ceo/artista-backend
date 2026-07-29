@@ -4,6 +4,7 @@ import org.springframework.data.domain.Pageable;
 
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.post.CreatePostRequest;
+import com.artist_in.app.dto.post.LikeToggleResult;
 import com.artist_in.app.dto.post.PostResponse;
 
 public interface PostService {
@@ -20,8 +21,10 @@ public interface PostService {
 
 	void deletePost(Long postId, Long requesterId);
 
-	boolean toggleLike(Long postId, Long userId);
+	LikeToggleResult toggleLike(Long postId, Long userId);
 
 	void incrementViews(Long postId, Long viewerId);
+
+	void markVideoReady(Long postId, String mediaUrl, String thumbnailUrl);
 
 }
