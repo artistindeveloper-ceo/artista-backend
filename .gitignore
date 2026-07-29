@@ -1,4 +1,4 @@
-# Compiled output
+﻿# Compiled output
 target/
 *.class
 
@@ -22,18 +22,17 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Environment / secrets
+# Environment secrets
 .env
 *.env.local
 
-# Uploaded media (local file storage for dev)
+# Uploaded media
 uploads/
-
-# Maven wrapper (optional - keep if you want to commit it)
-# .mvn/wrapper/maven-wrapper.jar
 
 # Test output
 *.hprof
 hs_err_pid*
 
-firebase-service-account.json
+# Firebase
+src/main/resources/firebase-service-account.json
+*firebase-service-account*
