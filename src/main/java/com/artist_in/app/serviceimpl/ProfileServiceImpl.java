@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service;
 import com.artist_in.app.entity.Profile;
 import com.artist_in.app.entity.ProfileRating;
 import com.artist_in.app.entity.User;
+import com.artist_in.app.entity.Professional.ProfileCategory;
 import com.artist_in.app.entity.location.City;
+import com.artist_in.app.repository.ProfileCategoryRepository;
 import com.artist_in.app.repository.ProfileRatingRepository;
 import com.artist_in.app.repository.ProfileRepository;
 import com.artist_in.app.repository.UserRepository;
@@ -21,6 +23,7 @@ import com.artist_in.app.service.ProfileService;
 import com.artist_in.app.validator.ProfileValidator;
 import com.artist_in.app.validator.ProfileValidatorFactory;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -32,48 +35,59 @@ public class ProfileServiceImpl implements ProfileService {
 	private final CityRepository cityRepository;
 	private final ProfileValidatorFactory validatorFactory;
 	private final ProfileRatingRepository ratingRepository;
+	private final ProfileCategoryRepository profileCategoryRepository;
 
 	public ProfileServiceImpl(ProfileRepository profileRepository, UserRepository userRepository,
 			CityRepository cityRepository, ProfileValidatorFactory validatorFactory,
-			ProfileRatingRepository ratingRepository) {
+			ProfileRatingRepository ratingRepository, ProfileCategoryRepository profileCategoryRepository) {
 		this.profileRepository = profileRepository;
 		this.userRepository = userRepository;
 		this.cityRepository = cityRepository;
 		this.validatorFactory = validatorFactory;
 		this.ratingRepository = ratingRepository;
+		this.profileCategoryRepository = profileCategoryRepository;
 	}
 
 	@Transactional
-	public Profile createOrUpdateProfile(Long userId, String professionalType, Long cityId,
+	public Profile createOrUpdateProfile(Long userId, String professionalType, Long cityId, String mobileNumber,
 			Map<String, Object> details) {
 
 		log.info("Creating/updating profile: userId={}, type={}, cityId={}", userId, professionalType, cityId);
 
 		User user = userRepository.findById(userId).orElseThrow(() -> {
 			log.warn("Profile save failed - user not found: userId={}", userId);
-			return new RuntimeException("User not found with id: " + userId);
+			return new EntityNotFoundException("User not found with id: " + userId);
 		});
 
 		City city = cityRepository.findById(cityId).orElseThrow(() -> {
 			log.warn("Profile save failed - invalid cityId: {}", cityId);
-			return new IllegalArgumentException("Invalid cityId: " + cityId);
+			return new EntityNotFoundException("City not found with id: " + cityId);
 		});
+
+		ProfileCategory category = profileCategoryRepository.findByCodeIgnoreCaseAndIsActiveTrue(professionalType)
+				.orElseThrow(() -> {
+					log.warn("Profile save failed - invalid professionalType: {}", professionalType);
+					return new IllegalArgumentException("Invalid professionalType: " + professionalType);
+				});
 
 		ProfileValidator validator = validatorFactory.getValidator(professionalType);
 		validator.validate(details);
 
-		// professionalType ab Profile pe nahi — User.roleType hi single source of
-		// truth hai, so yahin set/update karke save karte hain
-		user.setRoleType(professionalType.toUpperCase());
-		userRepository.save(user);
+		user.setCity(city);
+		if (mobileNumber != null && !mobileNumber.isBlank()) {
+			user.setMobileNumber(mobileNumber.trim());
+		}
 
-		Profile profile = profileRepository.findById(userId).orElse(new Profile());
+		Profile profile = profileRepository.findById(userId).orElseGet(Profile::new);
+
 		profile.setUser(user);
-		profile.setCity(city);
+		profile.setProfileCategory(category);
 		profile.setDetails(details);
 
 		Profile saved = profileRepository.save(profile);
-		log.info("Profile saved successfully: userId={}, professionalType={}", userId, user.getRoleType());
+
+		log.info("Profile saved successfully: userId={}, professionalType={}", userId, category.getCode());
+
 		return saved;
 	}
 
@@ -87,11 +101,12 @@ public class ProfileServiceImpl implements ProfileService {
 	public List<Profile> searchProfiles(String city, String professionalType) {
 		log.debug("Basic search: city={}, professionalType={}", city, professionalType);
 		if (city != null && professionalType != null) {
-			return profileRepository.findByCity_NameIgnoreCaseAndUser_RoleTypeIgnoreCase(city, professionalType);
+			return profileRepository.findByUser_City_NameIgnoreCaseAndProfileCategory_CodeIgnoreCase(city,
+					professionalType);
 		} else if (professionalType != null) {
-			return profileRepository.findByUser_RoleTypeIgnoreCase(professionalType);
+			return profileRepository.findByProfileCategory_CodeIgnoreCase(professionalType);
 		} else if (city != null) {
-			return profileRepository.findByCity_NameIgnoreCase(city);
+			return profileRepository.findByUser_City_NameIgnoreCase(city);
 		}
 		log.warn("searchProfiles called with no filters - this loads the ENTIRE table. "
 				+ "Prefer searchTopRatedProfiles for unfiltered/browsing use cases.");

@@ -20,12 +20,12 @@ import lombok.RequiredArgsConstructor;
 public class CategoryController {
 	private final CategoryService categoryService;
 
-	@GetMapping
-	public ResponseEntity<List<CategoryResponseDTO>> getAllCategories() {
-		log.info("GET /categories request received");
-		List<CategoryResponseDTO> categories = categoryService.getAllActiveCategories();
-		log.info("GET /categories completed. Returned {} categories.", categories.size());
-		return ResponseEntity.ok(categories);
-
-	}
+//	@GetMapping
+//	public ResponseEntity<List<CategoryResponseDTO>> getAllCategories() {
+//		log.info("GET /categories request received");
+//		List<CategoryResponseDTO> categories = categoryService.getAllActiveCategories();
+//		log.info("GET /categories completed. Returned {} categories.", categories.size());
+//		return ResponseEntity.ok(categories);
+//
+//	}
 }

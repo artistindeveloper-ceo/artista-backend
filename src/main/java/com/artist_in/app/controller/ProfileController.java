@@ -1,7 +1,6 @@
 package com.artist_in.app.controller;
 
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.artist_in.app.dto.profile.ProfileRequest;
 import com.artist_in.app.entity.Profile;
 import com.artist_in.app.service.ProfileService;
 
@@ -32,9 +33,9 @@ public class ProfileController {
 	// user now picks a City (autocomplete on Flutter side) instead of typing
 	// free text, and state/country are derived from that City on read.
 	@PostMapping("/{userId}")
-	public ResponseEntity<Profile> saveProfile(@PathVariable Long userId, @RequestParam String professionalType,
-			@RequestParam Long cityId, @RequestBody Map<String, Object> details) {
-		Profile savedProfile = profileService.createOrUpdateProfile(userId, professionalType, cityId, details);
+	public ResponseEntity<Profile> saveProfile(@PathVariable Long userId, @RequestBody ProfileRequest request) {
+		Profile savedProfile = profileService.createOrUpdateProfile(userId, request.getProfessionalType(),
+				request.getCityId(), request.getMobileNumber(), request.getDetails());
 		return ResponseEntity.ok(savedProfile);
 	}
 

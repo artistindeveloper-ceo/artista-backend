@@ -9,20 +9,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableCaching
 public class SpringCacheConfig {
-
     @Bean
     public CacheManager cacheManager() {
-
         ConcurrentMapCacheManager cacheManager =
                 new ConcurrentMapCacheManager(
                         "feed",
                         "explore",
                         "userPosts",
-                        "post"
+                        "post",
+                        "userInstruments"   // ← ये line जोड़ दें
                 );
-
         cacheManager.setAllowNullValues(false);
-
         return cacheManager;
     }
 }

@@ -11,11 +11,8 @@ import com.artist_in.app.entity.Notification;
 import com.artist_in.app.entity.User;
 import com.artist_in.app.enums.NotificationType;
 import com.artist_in.app.repository.NotificationRepository;
-import com.artist_in.app.repository.UserRepository;
 import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.util.UserMapper;
-import com.google.firebase.messaging.FirebaseMessaging;
-import com.google.firebase.messaging.Message;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,9 +21,9 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
+
 	private final NotificationRepository notificationRepository;
-	private final UserRepository userRepository;
-	private final FirebaseMessaging firebaseMessaging;
+	private final PushNotificationSender pushNotificationSender;
 
 	@Override
 	@Transactional
@@ -42,26 +39,13 @@ public class NotificationServiceImpl implements NotificationService {
 		log.info("Notification created: recipientId={}, actorId={}, type={}, referenceId={}", recipient.getId(),
 				actor != null ? actor.getId() : null, type, referenceId);
 
-		// ✅ Push notification bhejo agar recipient ka FCM token hai
-		sendPushNotification(recipient, actor, type, message);
-	}
-
-	private void sendPushNotification(User recipient, User actor, NotificationType type, String message) {
-		String token = recipient.getFcmToken();
-		if (token == null || token.isBlank()) {
-			log.debug("No FCM token for userId={}, skipping push", recipient.getId());
-			return;
-		}
-		try {
-			String title = actor != null ? actor.getDisplayName() : "Artist_in";
-			Message fcmMessage = Message.builder().setToken(token).setNotification(
-					com.google.firebase.messaging.Notification.builder().setTitle(title).setBody(message).build())
-					.build();
-			String response = firebaseMessaging.send(fcmMessage);
-			log.info("Push notification sent to userId={}, response={}", recipient.getId(), response);
-		} catch (Exception e) {
-			log.error("Failed to send push notification to userId={}", recipient.getId(), e);
-		}
+		// ✅ Push notification background thread pe jayega — transaction/response block
+		// nahi hoga.
+		// NOTE: actor.getDisplayName() aur recipient.getId() yahin extract kar liye —
+		// User entity ko async thread me pass karna risky hai (lazy-loaded fields,
+		// session already closed).
+		String actorDisplayName = actor != null ? actor.getDisplayName() : null;
+		pushNotificationSender.sendPushNotification(recipient.getId(), actorDisplayName, message);
 	}
 
 	@Override
@@ -85,14 +69,6 @@ public class NotificationServiceImpl implements NotificationService {
 		int updated = notificationRepository.markAllReadForRecipient(recipient);
 		log.info("Marked {} notifications as read for recipientId={}", updated, recipient.getId());
 		return updated;
-	}
-
-	@Override
-	@Transactional
-	public void registerDeviceToken(User user, String fcmToken) {
-		user.setFcmToken(fcmToken);
-		userRepository.save(user);
-		log.info("FCM token registered for userId={}", user.getId());
 	}
 
 	private NotificationResponse toResponse(Notification notification) {

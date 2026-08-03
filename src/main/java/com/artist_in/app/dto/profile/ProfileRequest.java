@@ -6,14 +6,8 @@ import lombok.Data;
 
 @Data
 public class ProfileRequest {
-//	@NotBlank
 	private String professionalType; // "EVENT_MANAGER"
-
-//	@NotBlank
-	private String displayName;
-
-	private String city;
-
-//	@NotNull
+	private Long cityId; // NAYA — City ke liye ID hi use karo, "city" String hataya
+	private String mobileNumber; // NAYA
 	private Map<String, Object> details; // role-specific data
 }

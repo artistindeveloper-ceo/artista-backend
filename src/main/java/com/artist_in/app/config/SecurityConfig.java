@@ -35,8 +35,14 @@ public class SecurityConfig {
 	private final CustomUserDetailsService userDetailsService;
 	private final CorsProperties corsProperties;
 
-	private static final String[] PUBLIC_ENDPOINTS = { "/api/v1/auth/**", "/api/v1/media/**", "/ws/**",
-			"/actuator/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/v3/api-docs" };
+	// NOTE: "/api/v1/auth/**" wildcard hata diya — warna
+	// "/api/v1/auth/device/register" bhi accidentally public ho jata,
+	// jabki wo authenticated route hona chahiye (Bearer token mandatory).
+	private static final String[] PUBLIC_ENDPOINTS = { "/api/v1/auth/register", "/api/v1/auth/login",
+			"/api/v1/auth/google", "/api/v1/auth/google/complete-registration", // ← YE NAYI LINE ADD KARO
+			"/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/media/**", "/ws/**", "/ws-native/**",
+			"/api/v1/categories/**", "/actuator/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
+			"/v3/api-docs" };
 
 	@Bean
 	public PasswordEncoder passwordEncoder() {

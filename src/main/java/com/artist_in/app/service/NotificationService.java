@@ -13,6 +13,5 @@ public interface NotificationService {
 	    PageResponse<NotificationResponse> getNotifications(User recipient, Pageable pageable);
 	    long getUnreadCount(User recipient);
 	    int markAllRead(User recipient);
-	    void registerDeviceToken(User user, String fcmToken); //
 
 }

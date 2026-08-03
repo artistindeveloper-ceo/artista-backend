@@ -6,7 +6,7 @@ import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import com.artist_in.app.entity.location.City;
+import com.artist_in.app.entity.Professional.ProfileCategory;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,15 +19,17 @@ import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "profiles", indexes = { @Index(name = "idx_profile_city", columnList = "city_id"),
-		@Index(name = "idx_profile_rating", columnList = "avg_rating") })
+@Table(name = "profiles", indexes = { @Index(name = "idx_profile_rating", columnList = "avg_rating"),
+		@Index(name = "idx_profile_category", columnList = "profile_category_id") })
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Profile extends BaseEntity {
@@ -40,24 +42,25 @@ public class Profile extends BaseEntity {
 	@JoinColumn(name = "user_id")
 	private User user;
 
-	// professionalType hataya — User.roleType hi single source of truth hai
-	// (MUSICIAN, PHOTOGRAPHER, etc.)
-
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "city_id")
-	private City city;
+	@JoinColumn(name = "profile_category_id")
+	private ProfileCategory profileCategory;
 
 	@Column(name = "is_available", nullable = false)
+	@Builder.Default
 	private boolean isAvailable = true;
 
 	@Column(name = "avg_rating")
+	@Builder.Default
 	private Double avgRating = 0.0;
 
 	@Column(name = "rating_count", nullable = false)
+	@Builder.Default
 	private Integer ratingCount = 0;
 
 	// Role-specific dynamic data (instruments, cameraGear, equipment, etc.)
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "details", columnDefinition = "jsonb")
+	@Builder.Default
 	private Map<String, Object> details = new HashMap<>();
 }

@@ -21,11 +21,14 @@ import com.artist_in.app.dto.business.BusinessResponse;
 import com.artist_in.app.dto.business.BusinessUpdateRequest;
 import com.artist_in.app.dto.message.ChatMessageResponse;
 import com.artist_in.app.dto.message.SendMessageRequest;
+import com.artist_in.app.entity.User;
+import com.artist_in.app.repository.FollowRepository;
+import com.artist_in.app.repository.UserRepository;
 import com.artist_in.app.security.UserPrincipal;
-import com.artist_in.app.service.BusinessFollowService;
-import com.artist_in.app.service.BusinessService;
 import com.artist_in.app.service.MessageService;
+import com.artist_in.app.service.BusinessService;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -35,7 +38,8 @@ import lombok.RequiredArgsConstructor;
 public class BusinessController {
 
 	private final BusinessService businessService;
-	private final BusinessFollowService businessFollowService;
+	private final FollowRepository followRepository; // ← BusinessFollowService ki jagah
+	private final UserRepository userRepository; // ← naya
 	private final MessageService messageService;
 
 	@PostMapping
@@ -45,13 +49,28 @@ public class BusinessController {
 		return BusinessResponse.from(businessService.create(currentUser.getUser().getId(), req));
 	}
 
+	// ✅ FIXED: followerCount/isFollowedByViewer ab asli `follows` table
+	// (User-to-User follow system) se aata hai — business.id hi user.id
+	// hai (owner), isliye yehi sahi source hai. Pehle BusinessFollowService
+	// use hota tha jo khaali business_follows table query karta tha.
 	@GetMapping("/{id}")
 	public BusinessResponse getById(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal currentUser) {
 		var business = businessService.getById(id);
-		long followerCount = businessFollowService.getFollowerCount(id);
-		boolean isFollowedByViewer = currentUser != null
-				&& businessFollowService.isFollowing(currentUser.getUser().getId(), id);
-		return BusinessResponse.from(business, followerCount, isFollowedByViewer);
+
+		User businessOwnerAsUser = userRepository.findById(id)
+				.orElseThrow(() -> new EntityNotFoundException("User not found: " + id));
+
+		long followerCount = followRepository.countByFollowing(businessOwnerAsUser);
+		long followingCount = followRepository.countByFollower(businessOwnerAsUser);   // ← NAYA
+
+		boolean isFollowedByViewer = false;
+		if (currentUser != null) {
+			User viewer = userRepository.findById(currentUser.getUser().getId())
+					.orElseThrow(() -> new EntityNotFoundException("User not found: " + currentUser.getUser().getId()));
+			isFollowedByViewer = followRepository.existsByFollowerAndFollowing(viewer, businessOwnerAsUser);
+		}
+
+		return BusinessResponse.from(business, followerCount, followingCount, isFollowedByViewer);
 	}
 
 	@PutMapping("/{id}")
@@ -79,11 +98,9 @@ public class BusinessController {
 			@AuthenticationPrincipal UserPrincipal currentUser, @Valid @RequestBody SendMessageRequest request) {
 		Long ownerId = businessService.getPrimaryOwnerUserId(id);
 		ChatMessageResponse response = messageService.sendMessage(currentUser.getUser().getId(), ownerId, request);
-
 		Map<String, Object> body = new HashMap<>();
 		body.put("conversationId", response.getConversationId());
 		body.put("otherUserId", ownerId);
-
 		return ResponseEntity.status(HttpStatus.CREATED).body(body);
 	}
 }

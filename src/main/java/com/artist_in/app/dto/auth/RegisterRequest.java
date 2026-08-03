@@ -45,4 +45,8 @@ public class RegisterRequest {
 	private String businessName;
 	private String businessType; // SHOP, ACADEMY, SCHOOL, INSTITUTE
 	private Long cityId;
+
+	private String deviceId;
+	private String deviceType;
+	private String fcmToken;
 }

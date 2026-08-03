@@ -1,23 +1,15 @@
 package com.artist_in.app.entity;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.hibernate.annotations.Fetch;
-import org.hibernate.annotations.FetchMode;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import com.artist_in.app.enums.InstrumentType;
+import com.artist_in.app.entity.location.City;
+import com.artist_in.app.enums.AccountType;
 import com.artist_in.app.enums.Role;
-import com.artist_in.app.instument.entity.InstrumentReview;
 
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -27,7 +19,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -83,18 +75,6 @@ public class User extends BaseEntity {
 	private boolean isMobileVerified = false;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "primary_instrument", length = 30)
-	private InstrumentType primaryInstrument;
-
-	@ElementCollection(targetClass = InstrumentType.class, fetch = FetchType.LAZY)
-	@CollectionTable(name = "user_instruments", joinColumns = @JoinColumn(name = "user_id"))
-	@Enumerated(EnumType.STRING)
-	@Column(name = "instrument", length = 30)
-	@Fetch(FetchMode.SUBSELECT)
-	@Builder.Default
-	private Set<InstrumentType> instruments = new HashSet<>();
-
-	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	@Builder.Default
 	private Role role = Role.USER;
@@ -115,17 +95,19 @@ public class User extends BaseEntity {
 	@Builder.Default
 	private boolean isEmailVerified = false;
 
-	@Column(name = "last_login_at")
-	private java.time.Instant lastLoginAt;
+	// PROFESSIONAL ya BUSINESS — decide karta hai ki is User ka Profile row
+	// banega ya Business row (roleType/category us respective table me hai)
+	@Enumerated(EnumType.STRING)
+	@Column(name = "account_type", length = 20)
+	private AccountType accountType;
 
-	@Column(name = "fcm_token", length = 500)
-	private String fcmToken;
-
-	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-	private List<InstrumentReview> reviews = new ArrayList<>();
-
-	private String roleType; // MUSICIAN, PHOTOGRAPHER, etc.
+	@Column(name = "verified", nullable = false)
+	@Builder.Default
 	private boolean verified = false;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "city_id")
+	private City city;
 
 	// PostgreSQL JSONB Column for flexible attributes
 	@JdbcTypeCode(SqlTypes.JSON)
