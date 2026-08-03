@@ -15,13 +15,15 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BusinessCreateRequest {
-
 	@NotBlank
 	private String name;
 
+	// SHOP, ACADEMY, SCHOOL, INSTITUTE, etc. — BusinessCategory.code se resolve
+	// hoga BusinessServiceImpl ke andar aur Business.businessCategory pe set hoga.
+	@NotBlank
+	private String businessCategoryCode;
+
 	private String description;
-
 	private Long cityId;
-
 	private Map<String, Object> details;
 }

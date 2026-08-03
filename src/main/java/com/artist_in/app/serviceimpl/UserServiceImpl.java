@@ -1,6 +1,12 @@
 package com.artist_in.app.serviceimpl;
 
-import com.artist_in.app.service.UserService;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,17 +18,23 @@ import com.artist_in.app.dto.user.ChangePasswordRequest;
 import com.artist_in.app.dto.user.UpdateProfileRequest;
 import com.artist_in.app.dto.user.UserProfileResponse;
 import com.artist_in.app.dto.user.UserSummaryResponse;
+import com.artist_in.app.entity.Business;
+import com.artist_in.app.entity.Profile;
 import com.artist_in.app.entity.User;
+import com.artist_in.app.enums.AccountType;
 import com.artist_in.app.enums.FollowRequestStatus;
 import com.artist_in.app.exception.BadRequestException;
 import com.artist_in.app.exception.ResourceNotFoundException;
+import com.artist_in.app.repository.BusinessRepository;
 import com.artist_in.app.repository.FollowRepository;
 import com.artist_in.app.repository.FollowRequestRepository;
 import com.artist_in.app.repository.PostRepository;
+import com.artist_in.app.repository.ProfileRepository;
 import com.artist_in.app.repository.UserRepository;
+import com.artist_in.app.service.UserService;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -35,6 +47,8 @@ public class UserServiceImpl implements UserService {
 	private final FollowRequestRepository followRequestRepository;
 	private final PostRepository postRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final ProfileRepository profileRepository;
+	private final BusinessRepository businessRepository;
 
 	@Override
 	public User getUserOrThrow(Long userId) {
@@ -104,14 +118,45 @@ public class UserServiceImpl implements UserService {
 					.findByRequesterAndTargetAndStatus(viewer, target, FollowRequestStatus.PENDING).isPresent();
 		}
 
+		// accountType ke hisab se INDIVIDUAL -> Profile.profileCategory,
+		// BUSINESS -> Business.businessCategory se category resolve karte hain.
+		// Flutter side ab guessing nahi karega, seedha accountType field use karega.
+		String roleType = null; // backward-compat field, sirf INDIVIDUAL ke liye set hota hai
+		String categoryCode = null;
+		String categoryDisplayName = null;
+		String businessName = null;
+
+		AccountType accountType = target.getAccountType();
+
+		if (accountType == AccountType.BUSINESS) {
+			Business business = businessRepository.findFirstActiveByOwnerId(target.getId()).orElse(null);
+			if (business != null) {
+				businessName = business.getName();
+				if (business.getBusinessCategory() != null) {
+					categoryCode = business.getBusinessCategory().getCode();
+					categoryDisplayName = business.getBusinessCategory().getDisplayName();
+				}
+			}
+		} else {
+			// INDIVIDUAL (ya accountType null — bare Google user jisne setup complete
+			// nahi kiya, us case me Profile bhi nahi hoga aur sab null rahega)
+			Profile profile = profileRepository.findById(target.getId()).orElse(null);
+			if (profile != null && profile.getProfileCategory() != null) {
+				roleType = profile.getProfileCategory().getCode();
+				categoryCode = roleType;
+				categoryDisplayName = profile.getProfileCategory().getCategoryName();
+			}
+		}
+
 		log.debug("Profile stats for userId={} -> followers={}, following={}, posts={}", target.getId(), followerCount,
 				followingCount, postCount);
 
 		return UserProfileResponse.builder().id(target.getId()).username(target.getUsername())
 				.email(viewingOwnProfile ? target.getEmail() : null).displayName(target.getDisplayName())
 				.bio(target.getBio()).profilePhotoUrl(target.getProfilePhotoUrl())
-				.coverPhotoUrl(target.getCoverPhotoUrl()).primaryInstrument(target.getPrimaryInstrument())
-				.instruments(target.getInstruments()).roleType(target.getRoleType()).isPrivate(target.isPrivate())
+				.coverPhotoUrl(target.getCoverPhotoUrl()).roleType(roleType)
+				.accountType(accountType != null ? accountType.name() : null).categoryCode(categoryCode)
+				.categoryDisplayName(categoryDisplayName).businessName(businessName).isPrivate(target.isPrivate())
 				.followerCount(followerCount).followingCount(followingCount).postCount(postCount)
 				.isFollowedByViewer(isFollowedByViewer).hasPendingFollowRequestFromViewer(hasPendingRequest)
 				.createdAt(target.getCreatedAt()).build();
@@ -132,19 +177,33 @@ public class UserServiceImpl implements UserService {
 			user.setBio(request.getBio());
 		}
 
-		if (request.getPrimaryInstrument() != null) {
-			user.setPrimaryInstrument(request.getPrimaryInstrument());
-		}
-
-		if (request.getInstruments() != null) {
-			user.setInstruments(request.getInstruments());
-		}
-
 		if (request.getIsPrivate() != null) {
 			user.setPrivate(request.getIsPrivate());
 		}
 
 		user = userRepository.save(user);
+
+		// primaryInstrument/instruments role-specific hai — Profile.details (JSONB)
+		// me jaate hain, User pe nahi. Sirf INDIVIDUAL account ke paas Profile hota
+		// hai.
+		if (request.getPrimaryInstrument() != null || request.getInstruments() != null) {
+			Profile profile = profileRepository.findById(userId).orElseThrow(() -> {
+				log.warn("Profile update failed - no profile found (not an individual account?): userId={}", userId);
+				return new EntityNotFoundException("Profile not found for userId: " + userId);
+			});
+
+			Map<String, Object> details = profile.getDetails() != null ? profile.getDetails() : new HashMap<>();
+
+			if (request.getPrimaryInstrument() != null) {
+				details.put("primaryInstrument", request.getPrimaryInstrument());
+			}
+			if (request.getInstruments() != null) {
+				details.put("instruments", request.getInstruments());
+			}
+
+			profile.setDetails(details);
+			profileRepository.save(profile);
+		}
 
 		log.info("Profile updated successfully for userId: {}", userId);
 
@@ -212,20 +271,22 @@ public class UserServiceImpl implements UserService {
 		Page<User> users = userRepository.findByDisplayNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(query,
 				query, pageable);
 
-		User currentUser = getUserOrThrow(currentUserId);
+		List<Long> userIds = users.getContent().stream().map(User::getId).collect(Collectors.toList());
 
-		Page<UserSummaryResponse> mapped = users.map(user -> {
+		// N+1 FIX: pehle har user ke liye 2 alag queries chal rahi thi (isFollowing +
+		// hasPending). Ab dono ek-ek batch query me nikal li jaati hain, result ID
+		// ke Set me daal ke O(1) lookup kiya jaata hai loop ke andar.
+		Set<Long> followingIds = userIds.isEmpty() ? Set.of()
+				: new HashSet<>(followRepository.findFollowingIdsByFollowerIdAndFollowingIdIn(currentUserId, userIds));
 
-			boolean isFollowing = followRepository.existsByFollowerIdAndFollowingId(currentUserId, user.getId());
+		Set<Long> pendingTargetIds = userIds.isEmpty() ? Set.of()
+				: new HashSet<>(
+						followRequestRepository.findPendingTargetIdsByRequesterIdAndTargetIdIn(currentUserId, userIds));
 
-			boolean hasPending = followRequestRepository
-					.findByRequesterAndTargetAndStatus(currentUser, user, FollowRequestStatus.PENDING).isPresent();
-
-			return UserSummaryResponse.builder().id(user.getId()).username(user.getUsername())
-					.displayName(user.getDisplayName()).profilePhotoUrl(user.getProfilePhotoUrl())
-					.primaryInstrument(user.getPrimaryInstrument()).isFollowing(isFollowing)
-					.hasPendingFollowRequest(hasPending).build();
-		});
+		Page<UserSummaryResponse> mapped = users.map(user -> UserSummaryResponse.builder().id(user.getId())
+				.username(user.getUsername()).displayName(user.getDisplayName())
+				.profilePhotoUrl(user.getProfilePhotoUrl()).isFollowing(followingIds.contains(user.getId()))
+				.hasPendingFollowRequest(pendingTargetIds.contains(user.getId())).build());
 
 		log.info("User search completed. Query='{}', Total Results={}", query, mapped.getTotalElements());
 

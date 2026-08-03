@@ -1,5 +1,10 @@
 package com.artist_in.app.serviceimpl;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.message.ChatMessageResponse;
 import com.artist_in.app.dto.message.ConversationResponse;
@@ -17,13 +22,9 @@ import com.artist_in.app.service.MessageService;
 import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.service.UserService;
 import com.artist_in.app.util.UserMapper;
-import com.artist_in.app.websocket.ChatMessageEventPublisher;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -33,7 +34,6 @@ public class MessageServiceImpl implements MessageService {
 	private final ChatMessageRepository chatMessageRepository;
 	private final UserService userService;
 	private final NotificationService notificationService;
-	private final ChatMessageEventPublisher chatMessageEventPublisher;
 
 	@Transactional
 	public Conversation getOrCreateConversation(Long userIdA, Long userIdB) {
@@ -48,11 +48,10 @@ public class MessageServiceImpl implements MessageService {
 		User first = userA.getId() < userB.getId() ? userA : userB;
 		User second = userA.getId() < userB.getId() ? userB : userA;
 
-		return conversationRepository.findByUserAAndUserB(first, second).orElseGet(
-				() -> {
-					log.info("Creating new conversation between userId={} and userId={}", first.getId(), second.getId());
-					return conversationRepository.save(Conversation.builder().userA(first).userB(second).build());
-				});
+		return conversationRepository.findByUserAAndUserB(first, second).orElseGet(() -> {
+			log.info("Creating new conversation between userId={} and userId={}", first.getId(), second.getId());
+			return conversationRepository.save(Conversation.builder().userA(first).userB(second).build());
+		});
 	}
 
 	@Override
@@ -78,7 +77,6 @@ public class MessageServiceImpl implements MessageService {
 		log.debug("Notification dispatched to recipientId={} for conversationId={}", recipientId, conversation.getId());
 
 		ChatMessageResponse response = toResponse(message);
-		chatMessageEventPublisher.publishToUser(recipient.getUsername(), response);
 		log.info("Message id={} sent successfully in conversationId={}", message.getId(), conversation.getId());
 		return response;
 	}
@@ -86,7 +84,8 @@ public class MessageServiceImpl implements MessageService {
 	@Override
 	@Transactional(readOnly = true)
 	public PageResponse<ChatMessageResponse> getMessages(Long conversationId, Long requesterId, Pageable pageable) {
-		log.debug("Fetching messages for conversationId={}, requesterId={}, page={}", conversationId, requesterId, pageable);
+		log.debug("Fetching messages for conversationId={}, requesterId={}, page={}", conversationId, requesterId,
+				pageable);
 		Conversation conversation = getConversationOrThrow(conversationId);
 		assertParticipant(conversation, requesterId);
 
@@ -114,11 +113,10 @@ public class MessageServiceImpl implements MessageService {
 	}
 
 	private Conversation getConversationOrThrow(Long conversationId) {
-		return conversationRepository.findById(conversationId)
-				.orElseThrow(() -> {
-					log.warn("Conversation not found, id={}", conversationId);
-					return ResourceNotFoundException.of("Conversation", conversationId);
-				});
+		return conversationRepository.findById(conversationId).orElseThrow(() -> {
+			log.warn("Conversation not found, id={}", conversationId);
+			return ResourceNotFoundException.of("Conversation", conversationId);
+		});
 	}
 
 	private void assertParticipant(Conversation conversation, Long userId) {

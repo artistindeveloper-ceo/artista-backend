@@ -6,7 +6,7 @@ import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import com.artist_in.app.entity.location.City;
+import com.artist_in.app.entity.business.BusinessCategory;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,13 +30,13 @@ import lombok.Setter;
  * one account. A different email/phone (i.e. a new User account) is used if
  * that person wants a second, separate business.
  *
- * Type (SHOP/ACADEMY/SCHOOL/INSTITUTE), verification, active-status, contact
- * email/phone, and cover photo all live on User.roleType / User fields — not
- * duplicated here.
+ * Verification, active-status, contact email/phone, and cover photo all live on
+ * User fields — not duplicated here. Business ka type ab BusinessCategory
+ * lookup table se link hai (SHOP/ACADEMY/SCHOOL/INSTITUTE).
  */
 @Entity
-@Table(name = "businesses", indexes = { @Index(name = "idx_business_city", columnList = "city_id"),
-		@Index(name = "idx_business_rating", columnList = "avg_rating") })
+@Table(name = "businesses", indexes = { @Index(name = "idx_business_rating", columnList = "avg_rating"),
+		@Index(name = "idx_business_category", columnList = "business_category_id") })
 @Getter
 @Setter
 @Builder
@@ -52,6 +52,12 @@ public class Business extends BaseEntity {
 	@JoinColumn(name = "user_id")
 	private User owner;
 
+	// roleType (String) ki jagah — ab BusinessCategory lookup table se link hai
+	// (SHOP, ACADEMY, SCHOOL, INSTITUTE, etc.)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "business_category_id", nullable = false)
+	private BusinessCategory businessCategory;
+
 	// Business/shop ka apna naam — displayName (owner ka naam) se alag ho sakta hai
 	@Column(nullable = false, length = 150)
 	private String name;
@@ -59,10 +65,6 @@ public class Business extends BaseEntity {
 	// Business ka description — personal bio se alag concept hai
 	@Column(columnDefinition = "TEXT")
 	private String description;
-
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "city_id")
-	private City city;
 
 	@Column(name = "avg_rating")
 	@Builder.Default

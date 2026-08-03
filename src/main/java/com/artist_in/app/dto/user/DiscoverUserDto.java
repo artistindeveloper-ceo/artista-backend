@@ -25,7 +25,6 @@ public class DiscoverUserDto {
 	public static DiscoverUserDto from(User user, boolean hasPendingFollowRequest) {
 		return DiscoverUserDto.builder().id(user.getId()).username(user.getUsername())
 				.displayName(user.getDisplayName()).bio(user.getBio()).profilePhotoUrl(user.getProfilePhotoUrl())
-				.primaryInstrument(user.getPrimaryInstrument()).joinedAt(user.getCreatedAt())
-				.hasPendingFollowRequest(hasPendingFollowRequest).build();
+				.joinedAt(user.getCreatedAt()).hasPendingFollowRequest(hasPendingFollowRequest).build();
 	}
 }
