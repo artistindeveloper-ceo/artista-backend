@@ -13,6 +13,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RegisterDeviceRequest {
+
+	@NotBlank(message = "deviceId is required")
+	private String deviceId;
+
 	@NotBlank(message = "fcmToken is required")
 	private String fcmToken;
 }

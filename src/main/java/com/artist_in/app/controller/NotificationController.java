@@ -4,11 +4,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.artist_in.app.dto.auth.RegisterDeviceRequest;
 import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.notification.NotificationResponse;
@@ -17,7 +15,6 @@ import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.service.NotificationService;
 import com.artist_in.app.service.UserService;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -49,13 +46,5 @@ public class NotificationController {
 		log.info("Marking all notifications as read for userId={}", user.getId());
 		notificationService.markAllRead(user);
 		return ResponseEntity.ok(MessageResponse.of("All notifications marked as read."));
-	}
-
-	@PostMapping("/register-device")
-	public ResponseEntity<MessageResponse> registerDevice(@Valid @RequestBody RegisterDeviceRequest request) {
-		User user = userService.getUserOrThrow(SecurityUtils.getCurrentUserId());
-		log.info("Registering FCM token for userId={}", user.getId());
-		notificationService.registerDeviceToken(user, request.getFcmToken());
-		return ResponseEntity.ok(MessageResponse.of("Device registered for notifications."));
 	}
 }

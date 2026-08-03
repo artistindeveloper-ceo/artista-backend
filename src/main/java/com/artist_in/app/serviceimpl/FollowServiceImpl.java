@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.artist_in.app.dto.common.PageResponse;
+import com.artist_in.app.dto.follow.FollowActionResponse;
 import com.artist_in.app.dto.follow.FollowRequestResponse;
 import com.artist_in.app.dto.user.UserSummaryResponse;
 import com.artist_in.app.entity.Follow;
@@ -43,7 +44,7 @@ public class FollowServiceImpl implements FollowService {
 
     @Override
     @Transactional
-    public String follow(Long followerId, Long targetId) {
+    public FollowActionResponse follow(Long followerId, Long targetId) {
         log.info("Follow requested: followerId={}, targetId={}", followerId, targetId);
 
         if (followerId.equals(targetId)) {
@@ -55,7 +56,11 @@ public class FollowServiceImpl implements FollowService {
 
         if (followRepository.existsByFollowerAndFollowing(follower, target)) {
             log.debug("User {} already follows user {}", followerId, targetId);
-            return "ALREADY_FOLLOWING";
+            return FollowActionResponse.builder()
+                    .status("ALREADY_FOLLOWING")
+                    .following(true)
+                    .followersCount(followRepository.countByFollowing(target))
+                    .build();
         }
 
         if (target.isPrivate()) {
@@ -82,24 +87,40 @@ public class FollowServiceImpl implements FollowService {
 
             notificationService.notify(target, follower, NotificationType.FOLLOW_REQUEST_RECEIVED,
                     request.getId(), follower.getDisplayName() + " requested to follow you.");
-            return "REQUEST_PENDING";
+
+            return FollowActionResponse.builder()
+                    .status("REQUEST_PENDING")
+                    .following(false)
+                    .followersCount(followRepository.countByFollowing(target))
+                    .build();
         }
 
         createFollowRelationship(follower, target);
         log.info("User {} started following user {}", followerId, targetId);
         notificationService.notify(target, follower, NotificationType.NEW_FOLLOWER,
                 follower.getId(), follower.getDisplayName() + " started following you.");
-        return "FOLLOWING";
+
+        return FollowActionResponse.builder()
+                .status("FOLLOWING")
+                .following(true)
+                .followersCount(followRepository.countByFollowing(target))
+                .build();
     }
 
     @Override
     @Transactional
-    public void unfollow(Long followerId, Long targetId) {
+    public FollowActionResponse unfollow(Long followerId, Long targetId) {
         log.info("Unfollow requested: followerId={}, targetId={}", followerId, targetId);
         User follower = userService.getUserOrThrow(followerId);
         User target = userService.getUserOrThrow(targetId);
         followRepository.deleteByFollowerAndFollowing(follower, target);
         log.info("User {} unfollowed user {}", followerId, targetId);
+
+        return FollowActionResponse.builder()
+                .status("UNFOLLOWED")
+                .following(false)
+                .followersCount(followRepository.countByFollowing(target))
+                .build();
     }
 
     @Override

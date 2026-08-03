@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
 import com.artist_in.app.dto.message.ChatMessageResponse;
@@ -19,7 +18,8 @@ import com.artist_in.app.dto.message.SendMessageRequest;
 import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.security.UserPrincipal;
 import com.artist_in.app.service.MessageService;
-
+import com.artist_in.app.service.UserService;
+import com.artist_in.app.websocket.ChatMessageEventPublisher;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,8 +29,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/messages")
 @RequiredArgsConstructor
 public class MessageController {
-
 	private final MessageService messageService;
+	private final UserService userService;
+	private final ChatMessageEventPublisher chatMessageEventPublisher;
 
 	@GetMapping("/conversations")
 	public ResponseEntity<PageResponse<ConversationResponse>> getConversations(Pageable pageable) {
@@ -66,6 +67,12 @@ public class MessageController {
 		log.info("Sending message from senderId={} to recipientId={}", senderId, recipientId);
 		ChatMessageResponse response = messageService.sendMessage(senderId, recipientId, request);
 		log.debug("Message sent, id={} in conversationId={}", response.getId(), response.getConversationId());
+
+		// WebSocket push happens here, AFTER the DB transaction has committed —
+		// keeps the transaction short and the HTTP response fast.
+		String recipientUsername = userService.getUserOrThrow(recipientId).getUsername();
+		chatMessageEventPublisher.publishToUser(recipientUsername, response);
+
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 

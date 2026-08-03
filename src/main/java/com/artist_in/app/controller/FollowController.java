@@ -1,6 +1,5 @@
 package com.artist_in.app.controller;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -10,14 +9,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.artist_in.app.dto.common.MessageResponse;
 import com.artist_in.app.dto.common.PageResponse;
+import com.artist_in.app.dto.follow.FollowActionResponse;
 import com.artist_in.app.dto.follow.FollowRequestResponse;
 import com.artist_in.app.dto.user.UserSummaryResponse;
 import com.artist_in.app.security.SecurityUtils;
 import com.artist_in.app.service.FollowService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
@@ -29,21 +29,21 @@ public class FollowController {
 	private final FollowService followService;
 
 	@PostMapping("/users/{userId}/follow")
-	public ResponseEntity<MessageResponse> follow(@PathVariable Long userId) {
+	public ResponseEntity<FollowActionResponse> follow(@PathVariable Long userId) {
 		Long currentUserId = SecurityUtils.getCurrentUserId();
 		log.info("User {} requested to follow user {}", currentUserId, userId);
-		String result = followService.follow(currentUserId, userId);
-		log.info("Follow result for user {} -> {}: {}", currentUserId, userId, result);
-		return ResponseEntity.ok(MessageResponse.of(result));
+		FollowActionResponse result = followService.follow(currentUserId, userId);
+		log.info("Follow result for user {} -> {}: {}", currentUserId, userId, result.getStatus());
+		return ResponseEntity.ok(result);
 	}
 
 	@DeleteMapping("/users/{userId}/follow")
-	public ResponseEntity<MessageResponse> unfollow(@PathVariable Long userId) {
+	public ResponseEntity<FollowActionResponse> unfollow(@PathVariable Long userId) {
 		Long currentUserId = SecurityUtils.getCurrentUserId();
 		log.info("User {} requested to unfollow user {}", currentUserId, userId);
-		followService.unfollow(currentUserId, userId);
+		FollowActionResponse result = followService.unfollow(currentUserId, userId);
 		log.info("User {} unfollowed user {}", currentUserId, userId);
-		return ResponseEntity.ok(MessageResponse.of("Unfollowed successfully."));
+		return ResponseEntity.ok(result);
 	}
 
 	@PostMapping("/follow-requests/{requestId}/accept")
@@ -73,14 +73,14 @@ public class FollowController {
 
 	@GetMapping("/users/{userId}/followers")
 	public ResponseEntity<PageResponse<UserSummaryResponse>> getFollowers(@PathVariable Long userId,
-																		  Pageable pageable) {
+			Pageable pageable) {
 		log.debug("Fetching followers for user {}, page={}", userId, pageable);
 		return ResponseEntity.ok(followService.getFollowers(userId, pageable));
 	}
 
 	@GetMapping("/users/{userId}/following")
 	public ResponseEntity<PageResponse<UserSummaryResponse>> getFollowing(@PathVariable Long userId,
-																		  Pageable pageable) {
+			Pageable pageable) {
 		log.debug("Fetching following list for user {}, page={}", userId, pageable);
 		return ResponseEntity.ok(followService.getFollowing(userId, pageable));
 	}

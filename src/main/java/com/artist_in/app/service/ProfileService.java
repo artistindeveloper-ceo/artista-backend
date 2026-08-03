@@ -10,9 +10,8 @@ import com.artist_in.app.entity.Profile;
 
 public interface ProfileService {
 
-	// city -> cityId: profile location is now set by picking a City record,
-	// not typing free text. State/country are derived from City on read.
-	Profile createOrUpdateProfile(Long userId, String professionalType, Long cityId, Map<String, Object> details);
+	Profile createOrUpdateProfile(Long userId, String professionalType, Long cityId, String mobileNumber,
+			Map<String, Object> details);
 
 	Profile getProfileById(Long userId);
 
@@ -24,4 +23,5 @@ public interface ProfileService {
 	Profile addRating(Long profileId, Long ratedByUserId, Integer stars, String comment);
 
 	void deleteProfile(Long userId);
+
 }

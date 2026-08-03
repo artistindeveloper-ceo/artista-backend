@@ -17,4 +17,10 @@ public class LoginRequest {
 
     @NotBlank(message = "Password is required.")
     private String password;
+
+    private String deviceId;
+    private String deviceType;
+    private String fcmToken;
+    private String deviceModel;
+    private String deviceOs;
 }

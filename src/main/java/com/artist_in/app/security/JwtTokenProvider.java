@@ -27,6 +27,9 @@ public class JwtTokenProvider {
 
 	private final JwtProperties jwtProperties;
 
+	private static final String SIGNUP_TOKEN_TYPE = "google_signup";
+	private static final long SIGNUP_TOKEN_EXPIRATION_MS = 10 * 60 * 1000; // 10 min
+
 	private SecretKey signingKey() {
 		byte[] keyBytes;
 		try {
@@ -79,5 +82,34 @@ public class JwtTokenProvider {
 
 	public long getRefreshTokenExpirationMs() {
 		return jwtProperties.getRefreshTokenExpirationMs();
+	}
+
+	public String generateSignupToken(String email, String googleSub, String name) {
+		Date now = new Date();
+		Date expiry = new Date(now.getTime() + SIGNUP_TOKEN_EXPIRATION_MS);
+		return Jwts.builder().subject(email).claim("type", SIGNUP_TOKEN_TYPE).claim("googleSub", googleSub)
+				.claim("name", name).issuedAt(now).expiration(expiry).signWith(signingKey()).compact();
+	}
+
+	public SignupTokenClaims parseSignupToken(String token) {
+		Claims claims;
+		try {
+			claims = parseClaims(token);
+		} catch (ExpiredJwtException ex) {
+			throw new com.artist_in.app.exception.UnauthorizedException(
+					"Signup session has expired. Please sign in with Google again.");
+		} catch (JwtException | IllegalArgumentException ex) {
+			throw new com.artist_in.app.exception.UnauthorizedException("Invalid signup token.");
+		}
+
+		if (!SIGNUP_TOKEN_TYPE.equals(claims.get("type", String.class))) {
+			throw new com.artist_in.app.exception.UnauthorizedException("Invalid token type.");
+		}
+
+		return new SignupTokenClaims(claims.getSubject(), claims.get("googleSub", String.class),
+				claims.get("name", String.class));
+	}
+
+	public record SignupTokenClaims(String email, String googleSub, String name) {
 	}
 }
